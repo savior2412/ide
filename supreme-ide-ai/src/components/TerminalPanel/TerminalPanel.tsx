@@ -163,6 +163,61 @@ const TerminalPanel = () => {
     ]);
   }, []);
 
+  // Function to navigate to a specific path in terminal
+  const navigateToPath = (path: string) => {
+    console.log('🚀 TerminalPanel: Navigating to path:', path);
+    
+    try {
+      // Switch to terminal tab
+      setActiveTab('terminal');
+      console.log('✅ TerminalPanel: Switched to terminal tab');
+      
+      // Set the cd command in input
+      const cdCommand = `cd "${path}"`;
+      setCurrentInput(cdCommand);
+      console.log('✅ TerminalPanel: Set input to:', cdCommand);
+      
+      // Focus the input
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          console.log('✅ TerminalPanel: Input focused');
+          // Trigger a visual effect to show the command was set
+          inputRef.current.style.background = 'rgba(0, 212, 255, 0.1)';
+          setTimeout(() => {
+            if (inputRef.current) {
+              inputRef.current.style.background = '';
+            }
+          }, 500);
+        } else {
+          console.warn('⚠️ TerminalPanel: Input ref not found');
+        }
+      }, 100);
+    } catch (error) {
+      console.error('❌ TerminalPanel: navigateToPath failed:', error);
+    }
+  };
+
+  // Listen for custom navigation events
+  useEffect(() => {
+    const handleNavigateToPath = (event: CustomEvent) => {
+      const path = event.detail.path;
+      console.log('🎯 TerminalPanel: Received navigation event for:', path);
+      navigateToPath(path);
+    };
+
+    // Listen for custom event
+    window.addEventListener('navigate-terminal', handleNavigateToPath as EventListener);
+
+    // Expose function globally for FileExplorer to use
+    (window as any).navigateTerminalToPath = navigateToPath;
+
+    return () => {
+      window.removeEventListener('navigate-terminal', handleNavigateToPath as EventListener);
+      delete (window as any).navigateTerminalToPath;
+    };
+  }, []);
+
   const tabs = [
     { id: 'terminal', label: 'Terminal', icon: '⚡', count: 0 },
     { id: 'problems', label: 'Problems', icon: '🔍', count: problems.length },

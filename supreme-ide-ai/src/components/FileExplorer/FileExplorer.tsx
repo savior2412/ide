@@ -399,20 +399,47 @@ const FileExplorer = ({ fileTree, onFileSelect, onRefresh, workspacePath }: File
   };
 
   const handleOpenTerminal = (targetPath: string) => {
-    console.log('⚡ Opening terminal in:', targetPath);
-    // Focus terminal tab and navigate to directory
-    const terminalTab = document.querySelector('[data-tab="terminal"]') as HTMLElement;
-    if (terminalTab) {
-      terminalTab.click();
-      // Add command to terminal to change directory
+    // If targetPath is a file, get its parent directory
+    const { isDirectory } = contextMenu;
+    let terminalPath = targetPath;
+    
+    if (targetPath && !isDirectory) {
+      // For files, navigate to parent directory
+      terminalPath = targetPath.substring(0, targetPath.lastIndexOf('/')) || workspacePath || '.';
+    } else if (!targetPath) {
+      // For workspace root
+      terminalPath = workspacePath || '.';
+    }
+    
+    console.log('⚡ Opening terminal in:', terminalPath, `(original: ${targetPath}, isDirectory: ${isDirectory})`);
+    
+          // Try using the global function first (cleaner approach)
+      if ((window as any).navigateTerminalToPath) {
+        console.log('🎯 Using global navigation function');
+        try {
+          (window as any).navigateTerminalToPath(terminalPath);
+          console.log('✅ Global function called successfully');
+          return;
+        } catch (error) {
+          console.error('❌ Global function failed:', error);
+        }
+      }
+      
+      // Fallback: dispatch custom event
+      console.log('📡 Using custom event approach');
+      const event = new CustomEvent('navigate-terminal', {
+        detail: { path: terminalPath }
+      });
+      window.dispatchEvent(event);
+    
+          // Legacy fallback (keep as last resort)
       setTimeout(() => {
-        const terminalInput = document.querySelector('input[placeholder*="command"]') as HTMLInputElement;
-        if (terminalInput) {
-          terminalInput.value = `cd "${targetPath}"`;
-          terminalInput.focus();
+        const terminalTab = document.querySelector('[data-tab="terminal"]') as HTMLElement;
+        if (terminalTab && !document.querySelector('.activeTab[data-tab="terminal"]')) {
+          console.log('🔄 Fallback: clicking terminal tab');
+          terminalTab.click();
         }
       }, 100);
-    }
   };
 
   const handleContextMenuAction = async (action: string) => {
@@ -671,13 +698,28 @@ const FileExplorer = ({ fileTree, onFileSelect, onRefresh, workspacePath }: File
               </div>
             )}
             
-            {/* Terminal option */}
-            {isDirectory && (
-              <div className={styles.contextMenuItem} onClick={() => handleContextMenuAction('open-terminal')}>
-                <span>⚡</span>
-                <span>Open Terminal Here</span>
-              </div>
-            )}
+            {/* Terminal option - Show for both files and directories */}
+            <div className={styles.contextMenuItem} onClick={() => {
+              console.log('🔧 Context menu item clicked: open-terminal');
+              handleContextMenuAction('open-terminal');
+            }}>
+              <span>⚡</span>
+              <span>Open Terminal Here</span>
+            </div>
+          </>
+        )}
+        
+        {/* Terminal option for workspace */}
+        {isWorkspace && (
+          <>
+            <div className={styles.contextMenuSeparator}></div>
+            <div className={styles.contextMenuItem} onClick={() => {
+              console.log('🔧 Context menu item clicked: open-terminal (workspace)');
+              handleContextMenuAction('open-terminal');
+            }}>
+              <span>⚡</span>
+              <span>Open Terminal Here</span>
+            </div>
           </>
         )}
       </div>

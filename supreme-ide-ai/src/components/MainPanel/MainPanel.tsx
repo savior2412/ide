@@ -84,6 +84,61 @@ const MainPanel = ({ filePath, fileContent, language, isDirty, onContentChange, 
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Navigation function for "Open in Terminal"
+  const navigateToPath = (path: string) => {
+    console.log('🚀 MainPanel: Navigating terminal to path:', path);
+    
+    try {
+      // Switch to terminal tab
+      setActiveBottomTab('terminal');
+      console.log('✅ MainPanel: Switched to terminal tab');
+      
+      // Set the cd command in input
+      const cdCommand = `cd "${path}"`;
+      setTerminalInput(cdCommand);
+      console.log('✅ MainPanel: Set terminal input to:', cdCommand);
+      
+      // Focus the input
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          console.log('✅ MainPanel: Terminal input focused');
+          // Visual highlight effect
+          inputRef.current.style.background = 'rgba(0, 212, 255, 0.1)';
+          setTimeout(() => {
+            if (inputRef.current) {
+              inputRef.current.style.background = '';
+            }
+          }, 500);
+        } else {
+          console.warn('⚠️ MainPanel: Terminal input ref not found');
+        }
+      }, 100);
+    } catch (error) {
+      console.error('❌ MainPanel: navigateToPath failed:', error);
+    }
+  };
+
+  // Expose global navigation function and listen for events
+  useEffect(() => {
+    const handleNavigateToPath = (event: CustomEvent) => {
+      const path = event.detail.path;
+      console.log('🎯 MainPanel: Received navigation event for:', path);
+      navigateToPath(path);
+    };
+
+    // Listen for custom event
+    window.addEventListener('navigate-terminal', handleNavigateToPath as EventListener);
+
+    // Expose function globally for FileExplorer to use
+    (window as any).navigateTerminalToPath = navigateToPath;
+
+    return () => {
+      window.removeEventListener('navigate-terminal', handleNavigateToPath as EventListener);
+      delete (window as any).navigateTerminalToPath;
+    };
+  }, []);
+
   // Tạo terminal đầu tiên khi có workspace
   useEffect(() => {
     if (workspacePath && terminals.length === 0) {
