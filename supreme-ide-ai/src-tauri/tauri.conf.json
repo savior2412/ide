@@ -1,20 +1,21 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "supreme-ide-ai",
-  "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "version": "0.0.0",
+  "identifier": "dev.supreme.ide",
   "build": {
-    "frontendDist": "../build",
-    "devUrl": "http://localhost:5173",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173"
   },
   "app": {
     "windows": [
       {
-        "title": "supreme-ide-ai",
-        "width": 800,
-        "height": 600,
+        "title": "Supreme IDE AI",
+        "width": 1280,
+        "height": 720,
+        "decorations": false,
+        "transparent": true,
         "resizable": true,
         "fullscreen": false
       }

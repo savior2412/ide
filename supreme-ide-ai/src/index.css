@@ -20,7 +20,7 @@
 /* Reset and Body styles */
 body {
   font-family: var(--font-mono);
-  background-color: var(--color-background);
+  background-color: transparent; /* Changed for tauri transparency */
   color: var(--color-text);
   overflow: hidden;
   margin: 0;
@@ -30,6 +30,7 @@ body {
 #root {
   height: 100vh;
   width: 100vw;
+  background-color: var(--color-background); /* Background now on the root */
 }
 
 /* Subtle scanline effect */
@@ -54,31 +55,13 @@ body::after {
 }
 
 /* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #1a1a1a;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-cyan-dark);
-  border: 1px solid #1a1a1a;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-cyan);
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #1a1a1a; }
+::-webkit-scrollbar-thumb { background: var(--color-cyan-dark); border: 1px solid #1a1a1a; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-cyan); }
 
 /* Glow effects */
-.text-glow-cyan {
-  text-shadow: 0 0 2px var(--color-cyan), 0 0 5px var(--color-cyan);
-}
-.text-glow-pink {
-  text-shadow: 0 0 2px var(--color-fuchsia), 0 0 5px var(--color-fuchsia);
-}
-.border-glow-cyan {
-  box-shadow: 0 0 15px -5px rgba(6, 182, 212, 0.5), inset 0 0 10px -5px rgba(6, 182, 212, 0.3);
-}
-.border-glow-pink {
-  box-shadow: 0 0 15px -5px rgba(217, 70, 239, 0.5), inset 0 0 10px -5px rgba(217, 70, 239, 0.3);
-}
+.text-glow-cyan { text-shadow: 0 0 2px var(--color-cyan), 0 0 5px var(--color-cyan); }
+.text-glow-pink { text-shadow: 0 0 2px var(--color-fuchsia), 0 0 5px var(--color-fuchsia); }
+.border-glow-cyan { box-shadow: 0 0 15px -5px rgba(6, 182, 212, 0.5), inset 0 0 10px -5px rgba(6, 182, 212, 0.3); }
+.border-glow-pink { box-shadow: 0 0 15px -5px rgba(217, 70, 239, 0.5), inset 0 0 10px -5px rgba(217, 70, 239, 0.3); }

@@ -1,32 +1,53 @@
-.app-container {
+/* src/App.css */
+.app-shell {
   display: flex;
+  flex-direction: column;
   height: 100vh;
-  padding: 0.5rem; /* p-2 */
-  gap: 0.5rem; /* gap-2 */
-  box-sizing: border-box;
+  width: 100vw;
+  border-radius: 8px; /* Optional: for rounded corners on macOS */
+  overflow: hidden;
 }
 
-.app-container__sidebar {
-  width: 16rem; /* w-64 */
-  background-color: var(--color-bg-surface);
-  backdrop-filter: blur(4px);
-  border: 1px solid var(--color-border-cyan);
-  display: flex;
-  flex-direction: column;
+.app-container {
+  flex-grow: 1; /* Quan trọng: Cho phép container này lấp đầy không gian */
+  display: flex; /* Cần thiết cho PanelGroup hoạt động */
+  overflow: hidden; /* Ngăn scroll không mong muốn */
 }
 
-.app-container__main {
-  flex: 1; /* flex-1 */
+/* Style cho thanh kéo ngang (giữa các cột) */
+.resize-handle-horizontal {
+  width: 8px;
+  background-color: transparent;
+  cursor: col-resize;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem; /* gap-2 */
+  align-items: center;
+  justify-content: center;
+}
+.resize-handle-horizontal:hover > div {
+  background-color: var(--color-cyan);
+}
+.resize-handle-horizontal > div {
+  width: 1px;
+  height: 100%;
+  background-color: var(--color-border-panel);
+  transition: background-color 200ms;
 }
 
-.app-container__assistant {
-  width: 24rem; /* w-96 */
-  background-color: var(--color-bg-surface);
-  backdrop-filter: blur(4px);
-  border: 1px solid var(--color-border-fuchsia);
+/* Style cho thanh kéo dọc (giữa editor và terminal) */
+.resize-handle-vertical {
+  height: 8px;
+  background-color: transparent;
+  cursor: row-resize;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.resize-handle-vertical:hover > div {
+  background-color: var(--color-cyan);
+}
+.resize-handle-vertical > div {
+  height: 1px;
+  width: 100%;
+  background-color: var(--color-border-panel);
+  transition: background-color 200ms;
 }

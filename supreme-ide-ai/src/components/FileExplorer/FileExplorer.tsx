@@ -1,3 +1,5 @@
+// src/components/FileExplorer/FileExplorer.tsx (CLEANED)
+// Dòng "import React from 'react';" đã được xóa vì không cần thiết với JSX transform mới.
 import styles from './FileExplorer.module.css';
 
 // SVG Icons as React Components for reusability
