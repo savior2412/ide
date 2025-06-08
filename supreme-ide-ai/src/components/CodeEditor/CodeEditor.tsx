@@ -1,28 +1,21 @@
-
 import React from 'react';
 import Editor from '@monaco-editor/react';
 import styles from './CodeEditor.module.css';
 
-const CodeEditor = () => {
-  const initialCode = `def calculate_total(items):
-    total = 0
-    for item in items:
-        total += item["price"]
-    return total
+interface CodeEditorProps {
+  value: string;
+  onChange: (value: string | undefined) => void;
+  language?: string;
+}
 
-items = [
-    { "name": "Pen", "price": 1.5 },
-    { "name": "Notebook", "price": 3.0 }
-]
-
-print(f"Total: {calculate_total(items)}")`;
-
+const CodeEditor = ({ value, onChange, language }: CodeEditorProps) => {
   return (
     <div className={styles.editorContainer}>
       <Editor
         height="100%"
-        defaultLanguage="python"
-        defaultValue={initialCode}
+        language={language || 'plaintext'}
+        value={value}
+        onChange={onChange}
         theme="vs-dark"
         options={{
           selectOnLineNumbers: true,

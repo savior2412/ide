@@ -2,20 +2,43 @@ import React from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import styles from './MainPanel.module.css';
 import CodeEditor from '../CodeEditor/CodeEditor';
+import { getLanguageFromExtension, getLanguageDisplayName } from '../../utils/fileUtils';
 
-const MainPanel = () => {
+interface MainPanelProps {
+  file: { path: string, content: string } | null;
+  isDirty: boolean;
+  onEditorChange: (value: string | undefined) => void;
+}
+
+const MainPanel = ({ file, isDirty, onEditorChange }: MainPanelProps) => {
+  const getFileName = (path: string) => {
+    return path.split(/[\\/]/).pop() || 'Untitled';
+  };
+
+  const language = file ? getLanguageFromExtension(file.path) : 'plaintext';
+  const languageDisplay = getLanguageDisplayName(language);
+
   return (
-    // Container này giờ chỉ để định kiểu, không làm layout nữa
+    // Container này giờ chỉ định kiểu, không làm layout nữa
     <div className={styles.container}>
       <PanelGroup direction="vertical">
         {/* Panel Editor */}
         <Panel defaultSize={70} minSize={20}>
           <div className={styles.editorPanel}>
             <div className={styles.panelHeader}>
-              <span className={styles.fileName}>inventory.py</span>
-              <span className={`${styles.language} text-glow-pink`}>Python 3.9</span>
+              <span className={styles.fileName}>
+                {file ? getFileName(file.path) : 'No file opened'}
+                {isDirty && ' ●'}
+              </span>
+              <span className={`${styles.language} text-glow-pink`}>
+                {languageDisplay} {isDirty ? '(Chưa lưu)' : '(Đã lưu)'}
+              </span>
             </div>
-            <CodeEditor />
+            <CodeEditor
+              value={file ? file.content : '// Chọn file để bắt đầu chỉnh sửa\n// File -> Open File hoặc File -> Open Folder'}
+              onChange={onEditorChange}
+              language={language}
+            />
           </div>
         </Panel>
         
@@ -33,7 +56,21 @@ const MainPanel = () => {
               </div>
             </div>
             <div className={styles.terminalBody}>
-              <pre><code>... (Nội dung terminal giữ nguyên) ...</code></pre>
+              <pre><code>
+{`... (Terminal placeholder - chức năng terminal sẽ được triển khai sau) ...
+
+$ cd ~/project
+$ ls -la
+drwxr-xr-x  12 user  staff    384 Jan 15 10:30 .
+drwxr-xr-x  25 user  staff    800 Jan 15 09:15 ..
+-rw-r--r--   1 user  staff     89 Jan 15 10:29 README.md
+-rw-r--r--   1 user  staff    456 Jan 15 10:30 main.py
+
+$ python main.py
+Hello, World!
+
+$ █`}
+              </code></pre>
             </div>
           </div>
         </Panel>

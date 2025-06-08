@@ -1,54 +1,164 @@
-# React + TypeScript + Vite
+# Supreme IDE AI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Một IDE hiện đại được xây dựng với **React + TypeScript + Tauri**, tích hợp AI Assistant và các chức năng quản lý file hoàn chỉnh.
 
-Currently, two official plugins are available:
+## ✨ Tính năng chính
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 🗂️ Quản lý File & Thư mục
+- **Open Folder** (`Ctrl+Shift+O`): Mở thư mục và hiển thị cây thư mục
+- **Open File** (`Ctrl+O`): Mở file từ dialog
+- **Save** (`Ctrl+S`): Lưu file hiện tại
+- **Save As** (`Ctrl+Shift+S`): Lưu file với tên/vị trí mới
+- **File Explorer**: Duyệt cây thư mục, click để mở file
+- **Language Detection**: Tự động nhận diện ngôn ngữ lập trình
 
-## Expanding the ESLint configuration
+### 🎨 Giao diện & UX
+- **Resizable Panels**: Có thể kéo thả để thay đổi kích thước
+- **Modern UI**: Thiết kế cyberpunk với hiệu ứng glow
+- **File Icons**: Icon màu sắc theo từng loại file
+- **Notifications**: Thông báo đẹp mắt thay vì alert
+- **Keyboard Shortcuts**: Hỗ trợ phím tắt tiện lợi
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 🤖 AI Assistant
+- **Chat Interface**: Giao diện chat với AI
+- **Context Files**: Thêm file vào context cho AI
+- **Real-time**: Phản hồi real-time
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+### 💻 Code Editor
+- **Monaco Editor**: Powered by VS Code
+- **Syntax Highlighting**: Hỗ trợ nhiều ngôn ngữ
+- **Auto-completion**: Gợi ý code thông minh
+- **Multi-language Support**: Python, JavaScript, TypeScript, Rust, Go, Java, C++, v.v.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🚀 Cài đặt & Chạy
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Yêu cầu hệ thống
+- **Node.js** 18+ 
+- **Rust** 1.70+
+- **pnpm** (khuyến nghị)
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+### Bước 1: Clone repository
+\`\`\`bash
+git clone <repository-url>
+cd supreme-ide-ai
+\`\`\`
+
+### Bước 2: Cài đặt dependencies
+\`\`\`bash
+# Frontend dependencies
+pnpm install
+
+# Tauri dependencies sẽ được cài tự động
+\`\`\`
+
+### Bước 3: Chạy development
+\`\`\`bash
+pnpm tauri dev
+\`\`\`
+
+### Bước 4: Build production
+\`\`\`bash
+pnpm tauri build
+\`\`\`
+
+## 📖 Hướng dẫn sử dụng
+
+### Mở thư mục project
+1. Nhấn `Ctrl+Shift+O` hoặc **File → Open Folder**
+2. Chọn thư mục chứa source code
+3. Cây thư mục sẽ hiển thị bên trái
+
+### Chỉnh sửa file
+1. Click vào file trong File Explorer
+2. Hoặc nhấn `Ctrl+O` để mở file từ dialog
+3. File sẽ mở trong Monaco Editor
+4. Chỉnh sửa và nhấn `Ctrl+S` để lưu
+
+### Sử dụng AI Assistant
+1. Nhập câu hỏi vào khung chat bên phải
+2. Nhấn **SEND** hoặc `Enter`
+3. AI sẽ phản hồi trong vài giây
+
+## 🛠️ Kiến trúc kỹ thuật
+
+### Frontend (React + TypeScript)
+- **TitleBar**: Menu và window controls
+- **FileExplorer**: Hiển thị cây thư mục
+- **MainPanel**: Code editor + terminal
+- **AssistantPanel**: AI chat interface
+- **Notification**: Hệ thống thông báo
+
+### Backend (Tauri + Rust)
+- **File Operations**: open_folder, open_file, save_file, save_as_file
+- **Dialog System**: Native file/folder picker
+- **File System Access**: Đọc/ghi file an toàn
+
+### State Management
+- **React State**: Quản lý state tại App level
+- **Props Drilling**: Truyền data xuống components
+- **Callbacks**: Xử lý events từ children components
+
+## 🔧 Cấu hình
+
+### Supported Languages
+- JavaScript/TypeScript
+- Python
+- Rust
+- Go
+- Java
+- C/C++
+- HTML/CSS
+- JSON/YAML
+- Markdown
+- Shell scripts
+- Và nhiều ngôn ngữ khác...
+
+### Keyboard Shortcuts
+| Phím tắt | Chức năng |
+|----------|-----------|
+| `Ctrl+Shift+O` | Open Folder |
+| `Ctrl+O` | Open File |
+| `Ctrl+S` | Save |
+| `Ctrl+Shift+S` | Save As |
+
+## 🐛 Troubleshooting
+
+### Lỗi build Tauri
+\`\`\`bash
+# Xóa cache và rebuild
+rm -rf target/
+pnpm tauri build
+\`\`\`
+
+### Lỗi permissions (macOS)
+\`\`\`bash
+# Allow app to access files
+System Preferences → Security & Privacy → Files and Folders
+\`\`\`
+
+### Lỗi TypeScript
+\`\`\`bash
+# Type check
+pnpm run lint
+\`\`\`
+
+## 📄 License
+
+MIT License
+
+## 🤝 Contributing
+
+1. Fork repository
+2. Tạo feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push branch: `git push origin feature/amazing-feature`
+5. Tạo Pull Request
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
+
+---
+
+**Được phát triển với ❤️ bởi AI Assistant & Human Collaboration**
