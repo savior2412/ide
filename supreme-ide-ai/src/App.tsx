@@ -120,6 +120,27 @@ function App() {
     }
   };
 
+  const handleRefreshFileTree = async () => {
+    if (!workspacePath || isLoadingFolder) return;
+    
+    try {
+      setIsLoadingFolder(true);
+      console.log('🔄 Frontend: Refreshing file tree for:', workspacePath);
+      
+      // Use a dedicated refresh command
+      const tree = await invoke<FileEntry[]>('refresh_file_tree', { workspacePath });
+      
+      setFolderTree(tree);
+      console.log('✅ Frontend: File tree refreshed with', tree.length, 'items');
+      showNotification('File tree refreshed', 'success');
+    } catch (error) {
+      console.error('❌ Frontend: Error refreshing file tree:', error);
+      showNotification('Failed to refresh file tree', 'error');
+    } finally {
+      setIsLoadingFolder(false);
+    }
+  };
+
   return (
     <div className="app">
       <TitleBar 
@@ -134,6 +155,8 @@ function App() {
             <FileExplorer 
               fileTree={folderTree} 
               onFileSelect={handleFileSelect}
+              onRefresh={handleRefreshFileTree}
+              workspacePath={workspacePath}
             />
           </Panel>
           <PanelResizeHandle />

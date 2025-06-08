@@ -372,34 +372,56 @@ fn write_file_content(file_path: String, content: String) -> Result<(), String> 
         Ok(_) => Ok(()),
         Err(e) => Err(format!("Failed to write file: {}", e))
     }
-}
-
-#[tauri::command]
-fn create_new_file(file_path: String) -> Result<(), String> {
+  }
+  
+  #[tauri::command]
+  fn create_new_file(file_path: String) -> Result<(), String> {
+    println!("🔧 Backend: Creating file: {}", file_path);
+    
     if Path::new(&file_path).exists() {
         return Err("File already exists".to_string());
     }
     
+    // Create parent directories if they don't exist
+    if let Some(parent) = Path::new(&file_path).parent() {
+        if !parent.exists() {
+            match fs::create_dir_all(parent) {
+                Ok(_) => println!("📁 Created parent directories for: {}", file_path),
+                Err(e) => return Err(format!("Failed to create parent directories: {}", e))
+            }
+        }
+    }
+    
     match fs::write(&file_path, "") {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            println!("✅ Created file: {}", file_path);
+            Ok(())
+        },
         Err(e) => Err(format!("Failed to create file: {}", e))
     }
 }
 
 #[tauri::command]
 fn create_new_folder(folder_path: String) -> Result<(), String> {
+    println!("🔧 Backend: Creating folder: {}", folder_path);
+    
     if Path::new(&folder_path).exists() {
         return Err("Folder already exists".to_string());
     }
     
     match fs::create_dir_all(&folder_path) {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            println!("✅ Created folder: {}", folder_path);
+            Ok(())
+        },
         Err(e) => Err(format!("Failed to create folder: {}", e))
     }
 }
 
 #[tauri::command]
 fn rename_file_or_folder(old_path: String, new_path: String) -> Result<(), String> {
+    println!("🔧 Backend: Renaming: {} -> {}", old_path, new_path);
+    
     if !Path::new(&old_path).exists() {
         return Err("Source path does not exist".to_string());
     }
@@ -409,13 +431,18 @@ fn rename_file_or_folder(old_path: String, new_path: String) -> Result<(), Strin
     }
     
     match fs::rename(&old_path, &new_path) {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            println!("✅ Renamed: {} -> {}", old_path, new_path);
+            Ok(())
+        },
         Err(e) => Err(format!("Failed to rename: {}", e))
     }
 }
 
 #[tauri::command]
 fn delete_file_or_folder(path: String) -> Result<(), String> {
+    println!("🔧 Backend: Deleting: {}", path);
+    
     let path_buf = Path::new(&path);
     
     if !path_buf.exists() {
@@ -424,12 +451,18 @@ fn delete_file_or_folder(path: String) -> Result<(), String> {
     
     if path_buf.is_dir() {
         match fs::remove_dir_all(&path) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                println!("✅ Deleted folder: {}", path);
+                Ok(())
+            },
             Err(e) => Err(format!("Failed to delete folder: {}", e))
         }
     } else {
         match fs::remove_file(&path) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                println!("✅ Deleted file: {}", path);
+                Ok(())
+            },
             Err(e) => Err(format!("Failed to delete file: {}", e))
         }
     }
@@ -686,7 +719,8 @@ fn analyze_rust_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) ->
     Ok(())
 }
 
-// Helper functions
+// Helper functions - currently unused but may be needed for future enhancements
+#[allow(dead_code)]
 fn extract_variable_declaration(line: &str) -> Option<String> {
     if line.trim_start().starts_with("const ") || line.trim_start().starts_with("let ") || line.trim_start().starts_with("var ") {
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -699,6 +733,7 @@ fn extract_variable_declaration(line: &str) -> Option<String> {
     None
 }
 
+#[allow(dead_code)]
 fn is_variable_used(var_name: &str, content: &str) -> bool {
     let usage_count = content.matches(var_name).count();
     usage_count > 1 // More than just the declaration
@@ -785,6 +820,16 @@ fn is_builtin_python(name: &str) -> bool {
                    "zip" | "map" | "filter" | "sorted" | "reversed" | "sum" | "max" | "min")
 }
 
+#[tauri::command]
+fn refresh_file_tree(workspace_path: String) -> Result<Vec<FileEntry>, String> {
+    println!("🔄 Backend: Refreshing file tree for: {}", workspace_path);
+    
+    let tree = read_dir_recursive(&workspace_path, 3, 0);
+    
+    println!("✅ Backend: File tree refreshed with {} entries", tree.len());
+    Ok(tree)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -805,7 +850,8 @@ pub fn run() {
             rename_file_or_folder,
             delete_file_or_folder,
             run_file_in_terminal,
-            analyze_workspace_problems
+            analyze_workspace_problems,
+            refresh_file_tree
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

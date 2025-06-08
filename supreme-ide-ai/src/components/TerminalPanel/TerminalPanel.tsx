@@ -39,15 +39,32 @@ interface Port {
 
 const TerminalPanel = () => {
   const [activeTab, setActiveTab] = useState('terminal');
-  const [terminalOutput, setTerminalOutput] = useState<string[]>(['user@Mac workspace % ']);
+  const [terminalOutput, setTerminalOutput] = useState<string[]>(['💫 Supreme IDE Terminal - Type "help" for commands', 'user@Mac workspace % ']);
   const [currentInput, setCurrentInput] = useState('');
   const [currentPath, setCurrentPath] = useState('workspace');
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isExecuting, setIsExecuting] = useState(false);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [outputs, setOutputs] = useState<OutputEntry[]>([]);
   const [debugEntries, setDebugEntries] = useState<DebugEntry[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll terminal to bottom when new output is added
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [terminalOutput]);
+
+  // Auto-focus input when tab changes to terminal
+  useEffect(() => {
+    if (activeTab === 'terminal' && inputRef.current && !isExecuting) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [activeTab, isExecuting]);
 
   // Mock data để demo
   useEffect(() => {
@@ -154,55 +171,92 @@ const TerminalPanel = () => {
     { id: 'ports', label: 'Ports', icon: '🌐', count: ports.length }
   ];
 
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [terminalOutput]);
-
   const executeCommand = async (command: string) => {
     const trimmedCommand = command.trim();
-    const commandLine = `user@Mac ${currentPath} % ${trimmedCommand}`;
-    setTerminalOutput(prev => [...prev, commandLine]);
-
+    
     if (!trimmedCommand) {
       setTerminalOutput(prev => [...prev, `user@Mac ${currentPath} % `]);
       return;
     }
 
+    // Add command to output and history
+    const commandLine = `user@Mac ${currentPath} % ${trimmedCommand}`;
+    setTerminalOutput(prev => [...prev, commandLine]);
+    
+    // Add to command history
+    setCommandHistory(prev => [...prev, trimmedCommand]);
+    setHistoryIndex(-1);
+    setIsExecuting(true);
+
     try {
+      // Built-in commands
       if (trimmedCommand === 'clear') {
-        setTerminalOutput([`user@Mac ${currentPath} % `]);
+        setTerminalOutput(['💫 Supreme IDE Terminal - Type "help" for commands', `user@Mac ${currentPath} % `]);
+        setIsExecuting(false);
         return;
       }
 
       if (trimmedCommand === 'help') {
         const helpText = [
+          '',
           '💫 Supreme IDE Terminal Commands:',
-          '  help     - Show this help message',
-          '  clear    - Clear terminal',
-          '  ls       - List directory contents',
-          '  pwd      - Show current directory',
-          '  cd <dir> - Change directory',
-          '  exit     - Close terminal',
+          '  📁 File Operations:',
+          '    ls, dir          - List directory contents',
+          '    cd <path>        - Change directory',
+          '    pwd              - Show current directory',
+          '    cat <file>       - Show file contents',
+          '    mkdir <name>     - Create directory',
+          '    touch <file>     - Create empty file',
+          '    rm <file>        - Remove file',
+          '    cp <src> <dest>  - Copy file',
+          '    mv <src> <dest>  - Move file',
+          '',
+          '  ⚡ Development:',
+          '    npm/pnpm/yarn    - Package managers',
+          '    node <file>      - Run Node.js script',
+          '    python <file>    - Run Python script',
+          '    cargo <cmd>      - Rust commands',
+          '    git <cmd>        - Git commands',
+          '',
+          '  🛠️ Terminal:',
+          '    clear            - Clear terminal',
+          '    help             - Show this help',
+          '    history          - Show command history',
+          '    exit             - Close terminal',
+          '',
+          '  💡 Tips:',
+          '    ↑/↓ arrows      - Navigate command history',
+          '    Tab              - Auto-complete (coming soon)',
           '',
         ];
         setTerminalOutput(prev => [...prev, ...helpText, `user@Mac ${currentPath} % `]);
+        setIsExecuting(false);
+        return;
+      }
+
+      if (trimmedCommand === 'history') {
+        const historyText = commandHistory.map((cmd, i) => `  ${i + 1}  ${cmd}`);
+        setTerminalOutput(prev => [...prev, '', '📝 Command History:', ...historyText, '', `user@Mac ${currentPath} % `]);
+        setIsExecuting(false);
         return;
       }
 
       if (trimmedCommand === 'pwd') {
         setTerminalOutput(prev => [...prev, currentPath, `user@Mac ${currentPath} % `]);
+        setIsExecuting(false);
         return;
       }
 
       if (trimmedCommand.startsWith('cd ')) {
         const newPath = trimmedCommand.substring(3).trim();
-        setCurrentPath(newPath || 'workspace');
-        setTerminalOutput(prev => [...prev, `user@Mac ${newPath || 'workspace'} % `]);
+        const targetPath = newPath || 'workspace';
+        setCurrentPath(targetPath);
+        setTerminalOutput(prev => [...prev, `user@Mac ${targetPath} % `]);
+        setIsExecuting(false);
         return;
       }
 
+      // Execute external command via backend
       const result = await invoke('execute_command_in_workspace', {
         command: trimmedCommand,
         workspacePath: '.'
@@ -212,14 +266,56 @@ const TerminalPanel = () => {
       setTerminalOutput(prev => [...prev, ...lines, `user@Mac ${currentPath} % `]);
 
     } catch (error) {
-      setTerminalOutput(prev => [...prev, `Error: ${error}`, `user@Mac ${currentPath} % `]);
+      const errorMsg = String(error).replace('Error: ', '');
+      setTerminalOutput(prev => [...prev, `❌ ${errorMsg}`, `user@Mac ${currentPath} % `]);
+    } finally {
+      setIsExecuting(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !isExecuting) {
       executeCommand(currentInput);
       setCurrentInput('');
+    }
+    
+    // Command history navigation
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (commandHistory.length > 0) {
+        const newIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
+        setHistoryIndex(newIndex);
+        setCurrentInput(commandHistory[newIndex]);
+      }
+    }
+    
+    else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex >= 0) {
+        const newIndex = historyIndex + 1;
+        if (newIndex >= commandHistory.length) {
+          setHistoryIndex(-1);
+          setCurrentInput('');
+        } else {
+          setHistoryIndex(newIndex);
+          setCurrentInput(commandHistory[newIndex]);
+        }
+      }
+    }
+    
+    // Ctrl+C to cancel current command
+    else if (e.key === 'c' && e.ctrlKey) {
+      if (isExecuting) {
+        setTerminalOutput(prev => [...prev, '^C', `user@Mac ${currentPath} % `]);
+        setIsExecuting(false);
+        setCurrentInput('');
+      }
+    }
+    
+    // Ctrl+L to clear terminal
+    else if (e.key === 'l' && e.ctrlKey) {
+      e.preventDefault();
+      setTerminalOutput(['💫 Supreme IDE Terminal - Type "help" for commands', `user@Mac ${currentPath} % `]);
     }
   };
 
@@ -260,14 +356,39 @@ const TerminalPanel = () => {
 
   const renderTerminal = () => (
     <div className={styles.terminalContainer}>
+      <div className={styles.terminalHeader}>
+        <span className={styles.terminalTitle}>💻 Interactive Terminal</span>
+        <div className={styles.terminalControls}>
+          <button 
+            className={styles.terminalButton}
+            onClick={() => setTerminalOutput(['💫 Supreme IDE Terminal - Type "help" for commands', `user@Mac ${currentPath} % `])}
+            title="Clear terminal (Ctrl+L)"
+          >
+            🗑️ Clear
+          </button>
+          <button 
+            className={styles.terminalButton}
+            onClick={() => executeCommand('help')}
+            title="Show help"
+          >
+            ❓ Help
+          </button>
+        </div>
+      </div>
+      
       <div ref={terminalRef} className={styles.terminalOutput}>
         {terminalOutput.map((line, index) => (
           <div key={index} className={styles.terminalLine}>
-            {line}
+            <span className={styles.terminalText}>{line}</span>
           </div>
         ))}
+        
         <div className={styles.inputLine}>
-          <span className={styles.prompt}>user@Mac {currentPath} % </span>
+          <span className={styles.prompt}>
+            <span className={styles.user}>user@Mac</span>{' '}
+            <span className={styles.path}>{currentPath}</span>{' '}
+            <span className={styles.promptSymbol}>%</span>{' '}
+          </span>
           <input
             ref={inputRef}
             type="text"
@@ -275,10 +396,18 @@ const TerminalPanel = () => {
             onChange={(e) => setCurrentInput(e.target.value)}
             onKeyDown={handleKeyDown}
             className={styles.terminalInput}
-            placeholder="Type a command..."
+            placeholder={isExecuting ? "Executing..." : "Type a command..."}
+            disabled={isExecuting}
             autoFocus
           />
+          {isExecuting && <span className={styles.executingIndicator}>⏳</span>}
         </div>
+      </div>
+      
+      <div className={styles.terminalFooter}>
+        <span className={styles.footerText}>
+          💡 Tips: Use ↑/↓ for history • Ctrl+C to cancel • Ctrl+L to clear
+        </span>
       </div>
     </div>
   );
@@ -448,6 +577,7 @@ const TerminalPanel = () => {
             key={tab.id}
             className={`${styles.tab} ${activeTab === tab.id ? styles.activeTab : ''}`}
             onClick={() => setActiveTab(tab.id)}
+            data-tab={tab.id}
           >
             <span className={styles.tabIcon}>{tab.icon}</span>
             <span className={styles.tabLabel}>{tab.label}</span>

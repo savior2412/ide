@@ -17,6 +17,12 @@
     color: #67e8f9; /* text-cyan-400 */
     font-size: 1.125rem; /* text-lg */
     line-height: 1.75rem;
+    margin-bottom: 4px;
+  }
+
+  .shortcuts {
+    margin-top: 4px;
+    opacity: 0.7;
   }
   
   .nav {
@@ -152,12 +158,15 @@
     0 8px 32px rgba(0, 0, 0, 0.8),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(16px);
-  min-width: 200px;
+  min-width: 240px;
   max-width: 300px;
   padding: 8px 0;
-  z-index: 99999 !important;
+  z-index: 9999999 !important;
   animation: contextMenuFadeIn 0.15s ease-out;
   transform-origin: top left;
+  pointer-events: auto !important;
+  display: block !important;
+  visibility: visible !important;
 }
 
 @keyframes contextMenuFadeIn {
@@ -179,6 +188,7 @@
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   white-space: nowrap;
   user-select: none;
@@ -186,6 +196,24 @@
   background: transparent;
   width: 100%;
   text-align: left;
+}
+
+.contextMenuItem span:first-child {
+  width: 20px;
+  text-align: center;
+}
+
+.contextMenuItem span:nth-child(2) {
+  flex: 1;
+}
+
+.shortcut {
+  font-size: 11px !important;
+  color: #666 !important;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
 }
 
 .contextMenuItem:hover {
@@ -205,4 +233,249 @@
   background: linear-gradient(90deg, transparent, #00d4ff, transparent);
   margin: 6px 12px;
   opacity: 0.3;
+}
+
+/* Shortcuts Help Overlay */
+.shortcutsOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999999;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.shortcutsModal {
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid #00d4ff;
+  border-radius: 12px;
+  box-shadow: 
+    0 0 30px rgba(0, 212, 255, 0.6),
+    0 20px 60px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(20px);
+  width: 400px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.shortcutsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.shortcutsHeader h3 {
+  margin: 0;
+  color: #00d4ff;
+  font-size: 18px;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+}
+
+.shortcutsHeader button {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.shortcutsHeader button:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.shortcutsList {
+  padding: 16px 24px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.shortcutItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.shortcutItem:last-child {
+  border-bottom: none;
+}
+
+.shortcutKey {
+  font-family: 'Courier New', monospace;
+  background: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.6);
+}
+
+.shortcutAction {
+  color: #e6edf3;
+  font-size: 14px;
+}
+
+.shortcutsFooter {
+  padding: 12px 24px 20px;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.shortcutsFooter small {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+/* Input Modal Styles */
+.inputModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000000;
+  backdrop-filter: blur(4px);
+}
+
+.inputModalContent {
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.95), rgba(31, 41, 55, 0.95));
+  border: 2px solid #00d4ff;
+  border-radius: 12px;
+  box-shadow: 
+    0 0 30px rgba(0, 212, 255, 0.5),
+    0 20px 40px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  min-width: 400px;
+  max-width: 500px;
+  animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.inputModalHeader {
+  padding: 20px 20px 10px 20px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.inputModalHeader h3 {
+  margin: 0;
+  color: #00d4ff;
+  font-size: 18px;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+.inputModalBody {
+  padding: 20px;
+}
+
+.inputModalInput {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  background: rgba(31, 41, 55, 0.8);
+  border: 2px solid rgba(0, 212, 255, 0.3);
+  border-radius: 8px;
+  color: #e6edf3;
+  outline: none;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.inputModalInput:focus {
+  border-color: #00d4ff;
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+  background: rgba(31, 41, 55, 0.9);
+}
+
+.inputModalInput::placeholder {
+  color: #6b7280;
+}
+
+.inputModalFooter {
+  padding: 10px 20px 20px 20px;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.inputModalButtonPrimary, .inputModalButtonSecondary {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inputModalButtonPrimary {
+  background: linear-gradient(135deg, #00d4ff, #0ea5e9);
+  color: #000;
+  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+}
+
+.inputModalButtonPrimary:hover {
+  background: linear-gradient(135deg, #0ea5e9, #00d4ff);
+  box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.inputModalButtonSecondary {
+  background: rgba(75, 85, 99, 0.8);
+  color: #e6edf3;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.inputModalButtonSecondary:hover {
+  background: rgba(107, 114, 128, 0.8);
+  border-color: rgba(156, 163, 175, 0.5);
 }

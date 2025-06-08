@@ -6,6 +6,10 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "dialog:allow-message",
+    "dialog:allow-confirm",
+    "dialog:default",
+    "core:window:allow-start-dragging"
   ]
 }
