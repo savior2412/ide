@@ -1,0 +1,84 @@
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+/* CSS Variables for consistency */
+:root {
+  --font-mono: 'Share Tech Mono', monospace;
+  --color-background: #0d0d0d;
+  --color-text: #e0e0e0;
+  --color-cyan: #06b6d4;
+  --color-cyan-dark: #0891b2;
+  --color-fuchsia: #d946ef;
+  --color-border-cyan: rgba(6, 182, 212, 0.3);
+  --color-border-fuchsia: rgba(217, 70, 239, 0.3);
+  --color-bg-surface: rgba(0, 0, 0, 0.3);
+  --color-bg-panel: rgba(0, 0, 0, 0.4);
+  --color-bg-header: rgba(23, 23, 23, 0.7); /* gray-900/70 */
+  --color-border-panel: rgba(51, 51, 51, 0.5); /* gray-700/50 */
+}
+
+/* Reset and Body styles */
+body {
+  font-family: var(--font-mono);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Subtle scanline effect */
+body::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  z-index: 9999;
+  pointer-events: none;
+  animation: scanline 10s linear infinite;
+}
+
+@keyframes scanline {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 -400px; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-cyan-dark);
+  border: 1px solid #1a1a1a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-cyan);
+}
+
+/* Glow effects */
+.text-glow-cyan {
+  text-shadow: 0 0 2px var(--color-cyan), 0 0 5px var(--color-cyan);
+}
+.text-glow-pink {
+  text-shadow: 0 0 2px var(--color-fuchsia), 0 0 5px var(--color-fuchsia);
+}
+.border-glow-cyan {
+  box-shadow: 0 0 15px -5px rgba(6, 182, 212, 0.5), inset 0 0 10px -5px rgba(6, 182, 212, 0.3);
+}
+.border-glow-pink {
+  box-shadow: 0 0 15px -5px rgba(217, 70, 239, 0.5), inset 0 0 10px -5px rgba(217, 70, 239, 0.3);
+}
