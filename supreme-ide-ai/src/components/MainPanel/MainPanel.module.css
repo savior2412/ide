@@ -425,67 +425,142 @@
   line-height: 1.4;
 }
 
+/* File Groups for Problems */
+.fileGroup {
+  margin-bottom: 12px;
+  border: 1px solid rgba(0, 212, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.fileHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 212, 255, 0.1);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.fileHeader:hover {
+  background: rgba(0, 212, 255, 0.15);
+}
+
+.collapseIcon {
+  color: #00d4ff;
+  font-size: 10px;
+  min-width: 12px;
+  transition: transform 0.2s ease;
+}
+
+.fileIcon {
+  color: #00d4ff;
+  font-weight: bold;
+  font-size: 12px;
+  min-width: 24px;
+  text-align: center;
+  background: rgba(0, 212, 255, 0.2);
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+
+.fileName {
+  color: #fff;
+  font-weight: 600;
+}
+
+.filePath {
+  color: #888;
+  font-size: 11px;
+  flex: 1;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+}
+
+.problemCount {
+  color: #ff6b6b;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 107, 107, 0.1);
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.problemsGroup {
+  padding: 0;
+}
+
 .problemItem {
   display: flex;
   align-items: flex-start;
-  padding: 12px 16px;
-  border-bottom: 1px solid #333;
-  transition: background-color 0.2s ease;
+  gap: 8px;
+  padding: 8px 12px 8px 40px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   cursor: pointer;
-  gap: 12px;
+  transition: background 0.2s ease;
+  font-size: 13px;
 }
 
 .problemItem:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 212, 255, 0.05);
 }
 
-.problemItem.error {
-  border-left: 3px solid #ff6b6b;
-}
-
-.problemItem.warning {
-  border-left: 3px solid #ffa500;
-}
-
-.problemItem.info {
-  border-left: 3px solid #74c0fc;
+.problemItem:last-child {
+  border-bottom: none;
 }
 
 .problemIcon {
-  font-size: 16px;
+  font-size: 12px;
+  min-width: 16px;
   margin-top: 2px;
-  flex-shrink: 0;
 }
 
-.problemDetails {
-  flex: 1;
-  min-width: 0;
+.problemIcon.error {
+  color: #ff6b6b;
+}
+
+.problemIcon.warning {
+  color: #ffd93d;
+}
+
+.problemIcon.info {
+  color: #00d4ff;
 }
 
 .problemMessage {
   color: #fff;
-  font-size: 14px;
+  flex: 1;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
   line-height: 1.4;
-  margin-bottom: 4px;
-  word-wrap: break-word;
+  word-break: break-word;
 }
 
-.problemLocation {
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
   color: #888;
-  font-size: 12px;
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-  margin-bottom: 2px;
+  text-align: center;
 }
 
-.problemSource {
-  color: #666;
-  font-size: 11px;
-  font-style: italic;
+.loadingSpinner {
+  font-size: 24px;
+  margin-bottom: 12px;
+  animation: spin 1s linear infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Output Tab */
@@ -690,4 +765,112 @@
   .terminalInput {
     font-size: 12px;
   }
+}
+
+/* Code Tabs */
+.codeTabsContainer {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  overflow-x: auto;
+  padding: 0;
+  width: 100%;
+  position: relative;
+  z-index: 10;
+  min-height: 40px;
+  height: 40px;
+}
+
+.codeTabsBar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  min-height: 40px;
+  height: 40px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 32px);
+  overflow: hidden;
+  background: rgba(5, 15, 35, 0.95);
+}
+
+.codeTab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.4);
+  border-right: 1px solid rgba(0, 212, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: 150px;
+  max-width: 250px;
+  height: 40px;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+.codeTab:hover {
+  background: rgba(0, 212, 255, 0.1);
+}
+
+.codeTab.activeTab {
+  background: rgba(0, 212, 255, 0.2);
+  border-bottom: 2px solid #00d4ff;
+}
+
+.tabIcon {
+  color: #00d4ff;
+  font-weight: bold;
+  font-size: 12px;
+  min-width: 24px;
+  text-align: center;
+  background: rgba(0, 212, 255, 0.2);
+  border-radius: 4px;
+  padding: 3px 6px;
+  line-height: 1;
+}
+
+.tabName {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.tabDirty {
+  color: #ff6b6b;
+  font-weight: bold;
+}
+
+.tabCloseButton {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.tabCloseButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ff6b6b;
 }

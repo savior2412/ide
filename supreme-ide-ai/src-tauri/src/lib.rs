@@ -5,6 +5,19 @@ use serde::{Serialize, Deserialize};
 use tauri::command;
 use tauri_plugin_dialog::DialogExt;
 use serde_json;
+use std::collections::HashMap;
+use regex;
+use std::os::unix::fs::PermissionsExt;
+use serde_json::{json, Value as JsonValue};
+use regex::Regex;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct FileInfo {
+    name: String,
+    is_directory: bool,
+    size: Option<u64>,
+    permissions: Option<String>,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct FileEntry {
@@ -362,7 +375,7 @@ fn get_file_list(dir_path: String) -> Result<Vec<String>, String> {
 fn read_file_content(file_path: String) -> Result<String, String> {
     match fs::read_to_string(&file_path) {
         Ok(content) => Ok(content),
-        Err(e) => Err(format!("Failed to read file: {}", e))
+        Err(err) => Err(format!("Failed to read file {}: {}", file_path, err))
     }
 }
 
@@ -489,8 +502,7 @@ fn run_file_in_terminal(file_path: String, workspace_path: String) -> Result<Str
 }
 
 #[tauri::command]
-fn analyze_workspace_problems(workspace_path: String) -> Result<Vec<serde_json::Value>, String> {
-    
+fn analyze_workspace_problems(workspace_path: String) -> Result<serde_json::Value, String> {
     let mut problems = Vec::new();
     let workspace_dir = Path::new(&workspace_path);
     
@@ -512,7 +524,7 @@ fn analyze_workspace_problems(workspace_path: String) -> Result<Vec<serde_json::
                 }
                 analyze_directory(&path, problems)?;
             } else if path.is_file() {
-                // Prioritize test-problems folder, avoid React components false positives
+                // Only analyze test-problems to match Cursor IDE behavior
                 let path_str = path.to_string_lossy();
                 let should_analyze = path_str.contains("test-problems");
                 
@@ -523,7 +535,7 @@ fn analyze_workspace_problems(workspace_path: String) -> Result<Vec<serde_json::
                             "js" | "jsx" => analyze_javascript_file(&path, problems)?,
                             "py" => analyze_python_file(&path, problems)?,
                             "rs" => analyze_rust_file(&path, problems)?,
-                            _ => {}
+                            _ => {} // Skip CSS/JSON analysis for now to reduce noise
                         }
                     }
                 }
@@ -535,55 +547,153 @@ fn analyze_workspace_problems(workspace_path: String) -> Result<Vec<serde_json::
     analyze_directory(workspace_dir, &mut problems)
         .map_err(|e| format!("Error analyzing workspace: {}", e))?;
     
-    Ok(problems)
+    // Group problems by file
+    let mut grouped_problems: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    
+    for problem in problems {
+        let file_path = problem.get("file")
+            .and_then(|f| f.as_str())
+            .unwrap_or("unknown");
+            
+        grouped_problems.entry(file_path.to_string())
+            .or_insert_with(Vec::new)
+            .push(problem);
+    }
+    
+    // Convert to final format
+    let mut file_groups = Vec::new();
+    
+    for (file_path, file_problems) in grouped_problems {
+        // Extract file info
+        let path = Path::new(&file_path);
+        let file_name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+        let extension = path.extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("");
+        
+        // Determine file type and icon
+        let (file_type, icon) = match extension.to_lowercase().as_str() {
+            "ts" | "tsx" => ("TypeScript", "TS"),
+            "js" | "jsx" => ("JavaScript", "JS"), 
+            "py" => ("Python", "PY"),
+            "rs" => ("Rust", "RS"),
+            _ => ("Unknown", "📄")
+        };
+        
+        let relative_path = file_path.replace(&workspace_path, "")
+            .trim_start_matches('/')
+            .to_string();
+        
+        let group = serde_json::json!({
+            "fileName": file_name,
+            "filePath": relative_path,
+            "fileType": file_type,
+            "icon": icon,
+            "problemCount": file_problems.len(),
+            "problems": file_problems
+        });
+        
+        file_groups.push(group);
+    }
+    
+    // Sort by file name
+    file_groups.sort_by(|a, b| {
+        a.get("fileName").and_then(|f| f.as_str())
+            .cmp(&b.get("fileName").and_then(|f| f.as_str()))
+    });
+    
+    Ok(serde_json::json!({
+        "fileGroups": file_groups,
+        "totalProblems": file_groups.iter()
+            .map(|g| g.get("problemCount").and_then(|c| c.as_u64()).unwrap_or(0))
+            .sum::<u64>()
+    }))
 }
 
 fn analyze_typescript_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(file_path)?;
     let file_path_str = file_path.to_string_lossy().to_string();
     
-    // Only analyze test files, avoid React component false positives
-    for (line_num, line) in content.lines().enumerate() {
-        let line_number = line_num + 1;
+    // Collect imports and declarations
+    let mut imports = std::collections::HashSet::new();
+    let mut declared_vars = std::collections::HashSet::new();
+    let mut interfaces = std::collections::HashSet::new();
+    
+    // First pass: collect imports, variables, and interfaces
+    for line in content.lines() {
         let trimmed = line.trim();
         
-        // Check for missing imports (more specific)
-        if trimmed.contains("invoke(") && !content.contains("import") && !content.contains("@tauri-apps") {
-            problems.push(serde_json::json!({
-                "id": format!("{}:{}:import", file_path_str, line_number),
-                "type": "error",
-                "message": "'invoke' is not defined. Did you forget to import from '@tauri-apps/api/core'?",
-                "file": file_path_str,
-                "line": line_number,
-                "column": 1,
-                "source": "TypeScript Analyzer"
-            }));
+        // Collect imports
+        if trimmed.starts_with("import ") {
+            if let Some(import) = extract_ts_import(trimmed) {
+                imports.insert(import);
+            }
         }
         
-        // Check for actual undefined variables (not React hooks or component variables)
-        if trimmed.contains("console.log(") && (trimmed.contains("undefined_var") || trimmed.contains("missing_var")) {
-            problems.push(serde_json::json!({
-                "id": format!("{}:{}:undefined", file_path_str, line_number),
-                "type": "error",
-                "message": "Undefined variable usage",
-                "file": file_path_str,
-                "line": line_number,
-                "column": 1,
-                "source": "TypeScript Analyzer"
-            }));
+        // Collect variable declarations
+        if let Some(var) = extract_ts_variable_declaration(trimmed) {
+            declared_vars.insert(var);
         }
         
-        // Check for JSX syntax errors (simple pattern)
-        if trimmed.contains("return <") && !trimmed.contains("</") && !trimmed.contains("/>") {
-            problems.push(serde_json::json!({
-                "id": format!("{}:{}:jsx", file_path_str, line_number),
-                "type": "error",
-                "message": "JSX element is not closed properly",
-                "file": file_path_str,
-                "line": line_number,
-                "column": 1,
-                "source": "TypeScript Analyzer"
-            }));
+        // Collect interface declarations
+        if trimmed.starts_with("interface ") || trimmed.starts_with("export interface ") {
+            if let Some(interface) = extract_ts_interface(trimmed) {
+                interfaces.insert(interface);
+            }
+        }
+    }
+    
+    // Second pass: find problems
+    for (line_num, line) in content.lines().enumerate() {
+        let line_number = line_num + 1;
+        let line_content = line.trim();
+        
+        // Skip comments and imports
+        if line_content.starts_with("//") || line_content.starts_with("/*") || 
+           line_content.starts_with("import ") || line_content.starts_with("export ") {
+            continue;
+        }
+        
+        // Look for undefined variables using regex
+        let word_regex = Regex::new(r"\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b").unwrap();
+        for word_match in word_regex.find_iter(line) {
+            let word = word_match.as_str();
+            let col = word_match.start() + 1;
+            
+            // Skip built-ins, keywords, and declared variables
+            if is_ts_builtin(word) || is_ts_keyword(word) || declared_vars.contains(word) || 
+               imports.contains(word) || interfaces.contains(word) {
+                continue;
+            }
+            
+            // Check if it's clearly an undefined variable
+            if (line_content.contains(&format!("console.log({})", word)) ||
+                line_content.contains(&format!("{} =", word)) ||
+                line_content.contains(&format!("let {} =", word)) ||
+                line_content.contains(&format!("const {} =", word)) ||
+                line_content.contains(&format!("return {}", word))) &&
+               !line_content.contains("function") &&
+               !line_content.contains("class") {
+                
+                // Determine error code and message based on context
+                let (error_code, message) = if word.contains("undefined") || word == "undefined_var" {
+                    ("ts(2552)", format!("Cannot find name '{}'. Did you mean 'undefined'?", word))
+                } else {
+                    ("ts(2304)", format!("Cannot find name '{}'.", word))
+                };
+                
+                problems.push(json!({
+                    "type": "error",
+                    "file": file_path.to_string_lossy().to_string(),
+                    "line": line_number,
+                    "column": col,
+                    "message": format!("{} {} [Ln {}, Col {}]", message, error_code, line_number, col),
+                    "source": "ts",
+                    "code": error_code
+                }));
+            }
         }
     }
     
@@ -818,6 +928,145 @@ fn is_builtin_python(name: &str) -> bool {
     matches!(name, "print" | "len" | "str" | "int" | "float" | "list" | "dict" | "tuple" | 
                    "set" | "bool" | "None" | "True" | "False" | "range" | "enumerate" | 
                    "zip" | "map" | "filter" | "sorted" | "reversed" | "sum" | "max" | "min")
+}
+
+// TypeScript helper functions
+fn extract_ts_import(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("import ") {
+        // Extract from: import { invoke } from '@tauri-apps/api/core'
+        if let Some(start) = trimmed.find('{') {
+            if let Some(end) = trimmed.find('}') {
+                let imports = &trimmed[start + 1..end];
+                return Some(imports.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>().join(","));
+            }
+        }
+        // Extract from: import React from 'react'
+        if let Some(from_pos) = trimmed.find(" from ") {
+            let import_part = &trimmed[7..from_pos].trim(); // Skip "import "
+            return Some(import_part.to_string());
+        }
+    }
+    None
+}
+
+fn extract_ts_variable_declaration(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("const ") || trimmed.starts_with("let ") || trimmed.starts_with("var ") {
+        let start = if trimmed.starts_with("const ") { 6 } else { 4 };
+        if let Some(eq_pos) = trimmed.find('=') {
+            let var_name = trimmed[start..eq_pos].trim();
+            return Some(var_name.to_string());
+        }
+        if let Some(colon_pos) = trimmed.find(':') {
+            let var_name = trimmed[start..colon_pos].trim();
+            return Some(var_name.to_string());
+        }
+    }
+    None
+}
+
+fn extract_ts_interface(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("interface ") {
+        let start = 10; // "interface ".len()
+        if let Some(space_pos) = trimmed[start..].find(|c: char| c.is_whitespace() || c == '{') {
+            return Some(trimmed[start..start + space_pos].to_string());
+        }
+    } else if trimmed.starts_with("export interface ") {
+        let start = 17; // "export interface ".len()
+        if let Some(space_pos) = trimmed[start..].find(|c: char| c.is_whitespace() || c == '{') {
+            return Some(trimmed[start..start + space_pos].to_string());
+        }
+    }
+    None
+}
+
+fn is_ts_builtin(name: &str) -> bool {
+    ["console", "window", "document", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "fetch", "Promise", "Array", "Object", "String", "Number", "Boolean", "Date", "Math", "JSON", "Error", "RegExp", "Map", "Set", "WeakMap", "WeakSet", "React", "useState", "useEffect", "useCallback", "useMemo", "useRef", "useContext", "Component", "Fragment", "props", "state", "setState", "render", "children", "className", "style", "key", "ref", "event", "e", "target", "value", "name", "id", "type", "onClick", "onChange", "onSubmit", "preventDefault", "stopPropagation"].contains(&name)
+}
+
+fn is_ts_keyword(name: &str) -> bool {
+    ["function", "const", "let", "var", "if", "else", "for", "while", "do", "switch", "case", "default", "break", "continue", "return", "try", "catch", "finally", "throw", "class", "interface", "extends", "implements", "import", "export", "from", "as", "default", "async", "await", "yield", "typeof", "instanceof", "new", "this", "super", "null", "undefined", "true", "false"].contains(&name)
+}
+
+fn is_ts_variable_used(var_name: &str, content: &str, declaration_line: usize) -> bool {
+    for (line_num, line) in content.lines().enumerate() {
+        let line_number = line_num + 1;
+        if line_number != declaration_line && line.contains(var_name) {
+            return true;
+        }
+    }
+    false
+}
+
+// CSS analyzer
+fn analyze_css_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
+    let content = fs::read_to_string(file_path)?;
+    let file_path_str = file_path.to_string_lossy().to_string();
+    
+    for (line_num, line) in content.lines().enumerate() {
+        let line_number = line_num + 1;
+        let trimmed = line.trim();
+        
+        // Check for missing semicolons in CSS
+        if trimmed.contains(':') && !trimmed.ends_with(';') && !trimmed.ends_with('{') && !trimmed.ends_with('}') && !trimmed.is_empty() && !trimmed.starts_with("/*") {
+            problems.push(serde_json::json!({
+                "id": format!("{}:{}:css-semicolon", file_path_str, line_number),
+                "type": "warning",
+                "message": "Missing semicolon in CSS declaration",
+                "file": file_path_str,
+                "line": line_number,
+                "column": trimmed.len(),
+                "source": "CSS Analyzer"
+            }));
+        }
+    }
+    
+    Ok(())
+}
+
+// JSON analyzer
+fn analyze_json_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
+    let content = fs::read_to_string(file_path)?;
+    let file_path_str = file_path.to_string_lossy().to_string();
+    
+    // Try to parse JSON
+    match serde_json::from_str::<serde_json::Value>(&content) {
+        Err(e) => {
+            problems.push(serde_json::json!({
+                "id": format!("{}:json-syntax", file_path_str),
+                "type": "error",
+                "message": format!("JSON syntax error: {}", e),
+                "file": file_path_str,
+                "line": 1,
+                "column": 1,
+                "source": "JSON Analyzer"
+            }));
+        }
+        Ok(_) => {
+            // JSON is valid, check for potential issues
+            for (line_num, line) in content.lines().enumerate() {
+                let line_number = line_num + 1;
+                let trimmed = line.trim();
+                
+                // Check for trailing commas (not allowed in strict JSON)
+                if trimmed.ends_with(",}") || trimmed.ends_with(",]") {
+                    problems.push(serde_json::json!({
+                        "id": format!("{}:{}:trailing-comma", file_path_str, line_number),
+                        "type": "warning",
+                        "message": "Trailing comma in JSON (not allowed in strict JSON)",
+                        "file": file_path_str,
+                        "line": line_number,
+                        "column": trimmed.len() - 1,
+                        "source": "JSON Analyzer"
+                    }));
+                }
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]

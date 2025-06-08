@@ -22,6 +22,20 @@ interface Problem {
   source?: string;
 }
 
+interface FileGroup {
+  fileName: string;
+  filePath: string;
+  fileType: string;
+  icon: string;
+  problemCount: number;
+  problems: Problem[];
+}
+
+interface ProblemsData {
+  fileGroups: FileGroup[];
+  totalProblems: number;
+}
+
 interface OutputEntry {
   timestamp: Date;
   source: string;
@@ -42,6 +56,16 @@ interface Port {
   url: string;
 }
 
+interface CodeTab {
+  id: string;
+  name: string;
+  path: string;
+  content: string;
+  language: string;
+  isActive: boolean;
+  isDirty?: boolean;
+}
+
 interface MainPanelProps {
   filePath?: string;
   fileContent: string;
@@ -60,8 +84,13 @@ const MainPanel = ({ filePath, fileContent, language, isDirty, onContentChange, 
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabType>('terminal');
   
   // Real problems from workspace analysis
-  const [problems, setProblems] = useState<Problem[]>([]);
+  const [problemsData, setProblemsData] = useState<ProblemsData>({ fileGroups: [], totalProblems: 0 });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // Code tabs management - Main tabs at top
+  const [codeTabs, setCodeTabs] = useState<CodeTab[]>([]);
+  const [activeCodeTab, setActiveCodeTab] = useState<string>('');
 
   const [outputEntries] = useState<OutputEntry[]>([
     { timestamp: new Date(), source: 'Build', message: 'Starting build process...', type: 'build' },
@@ -93,12 +122,37 @@ const MainPanel = ({ filePath, fileContent, language, isDirty, onContentChange, 
       setActiveBottomTab('terminal');
       console.log('✅ MainPanel: Switched to terminal tab');
       
-      // Set the cd command in input
-      const cdCommand = `cd "${path}"`;
-      setTerminalInput(cdCommand);
-      console.log('✅ MainPanel: Set terminal input to:', cdCommand);
+      // Check if there's already a terminal for this path
+      const existingTerminal = terminals.find(t => t.currentPath === path);
       
-      // Focus the input
+      if (existingTerminal) {
+        // Switch to existing terminal
+        setActiveTerminalId(existingTerminal.id);
+        console.log('✅ MainPanel: Switched to existing terminal for path:', path);
+      } else {
+        // Create new terminal for this path
+        const pathName = path.split('/').pop() || 'Root';
+        const newTerminal: TerminalSession = {
+          id: `terminal-${Date.now()}`,
+          name: `📁 ${pathName}`,
+          history: [{
+            command: '',
+            output: `Terminal opened in: ${path}
+Type 'help' for available commands.`,
+            timestamp: new Date()
+          }],
+          currentPath: path
+        };
+        
+        setTerminals(prev => [...prev, newTerminal]);
+        setActiveTerminalId(newTerminal.id);
+        console.log('✅ MainPanel: Created new terminal for path:', path);
+      }
+      
+      // Clear any pending input
+      setTerminalInput('');
+      
+      // Focus the input with visual effect
       setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.focus();
@@ -127,10 +181,10 @@ const MainPanel = ({ filePath, fileContent, language, isDirty, onContentChange, 
       navigateToPath(path);
     };
 
-    // Listen for custom event
+    // Listen for custom events
     window.addEventListener('navigate-terminal', handleNavigateToPath as EventListener);
 
-    // Expose function globally for FileExplorer to use
+    // Expose functions globally
     (window as any).navigateTerminalToPath = navigateToPath;
 
     return () => {
@@ -153,20 +207,53 @@ const MainPanel = ({ filePath, fileContent, language, isDirty, onContentChange, 
     }
   }, [workspacePath]);
 
+  // Auto-refresh problems when file content changes
+  useEffect(() => {
+    if (workspacePath && filePath && isDirty) {
+      console.log('🔄 File changed, auto-refreshing problems...');
+      // Debounce để tránh quá nhiều requests
+      const debounceTimer = setTimeout(() => {
+        analyzeWorkspaceProblems();
+      }, 1000); // Refresh sau 1s không có thay đổi
+      
+      return () => clearTimeout(debounceTimer);
+    }
+  }, [workspacePath, filePath, fileContent, isDirty]);
+
+  // Periodic refresh problems (mỗi 30s)
+  useEffect(() => {
+    if (!workspacePath) return;
+    
+    const intervalId = setInterval(() => {
+      console.log('⏰ Periodic problems refresh...');
+      analyzeWorkspaceProblems();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(intervalId);
+  }, [workspacePath]);
+
   const analyzeWorkspaceProblems = async () => {
     if (!workspacePath) return;
     
     setIsAnalyzing(true);
     try {
-      const result = await invoke<Problem[]>('analyze_workspace_problems', { 
-        workspacePath 
+      const result = await invoke('analyze_workspace_problems', { 
+        workspacePath: workspacePath 
+      }) as ProblemsData;
+      
+      setProblemsData(result);
+      
+      // Convert to flat list for backward compatibility
+      const allProblems: Problem[] = [];
+      result.fileGroups.forEach(group => {
+        group.problems.forEach(problem => {
+          allProblems.push(problem);
+        });
       });
       
-      console.log('🔍 Problems detected:', result.length);
-      setProblems(result);
     } catch (error) {
-      console.error('❌ Error analyzing workspace:', error);
-      setProblems([]);
+      console.error('Failed to analyze workspace problems:', error);
+      setProblemsData({ fileGroups: [], totalProblems: 0 });
     } finally {
       setIsAnalyzing(false);
     }
@@ -177,19 +264,21 @@ const MainPanel = ({ filePath, fileContent, language, isDirty, onContentChange, 
     analyzeWorkspaceProblems();
   };
 
-  const createNewTerminal = () => {
+  const createNewTerminal = (path?: string) => {
+    const terminalPath = path || workspacePath || '';
+    const pathName = terminalPath.split('/').pop() || 'Root';
+    
     const newTerminal: TerminalSession = {
       id: `terminal-${Date.now()}`,
-      name: `Terminal ${terminals.length + 1}`,
+      name: `💻 ${pathName}`,
       history: [{
         command: '',
-        output: `Welcome to Supreme IDE Terminal
-Workspace: ${workspacePath}
-
+        output: `Welcome to Supreme IDE Terminal!
+Current directory: ${terminalPath}
 Type 'help' for available commands.`,
         timestamp: new Date()
       }],
-      currentPath: workspacePath || ''
+      currentPath: terminalPath
     };
     
     setTerminals(prev => [...prev, newTerminal]);
@@ -284,13 +373,12 @@ Type 'help' for available commands.`,
     }, 100);
   }, []);
 
-  const getFileName = (path: string) => {
-    return path.split(/[\\/]/).pop() || 'Untitled';
+  const getFileName = (filePath: string): string => {
+    return filePath.split('/').pop() || 'Untitled';
   };
 
-  const getWorkspaceName = () => {
-    if (!workspacePath) return 'No Workspace';
-    return workspacePath.split(/[\\/]/).pop() || 'Workspace';
+  const getWorkspaceName = (): string => {
+    return workspacePath ? workspacePath.split('/').pop() || 'Workspace' : 'No Workspace';
   };
 
   const getCurrentPath = (terminal: TerminalSession) => {
@@ -314,11 +402,11 @@ Type 'help' for available commands.`,
 
   const getTabCount = (tab: BottomTabType) => {
     switch (tab) {
-      case 'problems': return problems.length;
+      case 'terminal': return terminals.length;
+      case 'problems': return problemsData.totalProblems;
       case 'output': return outputEntries.length;
       case 'debug': return debugEntries.length;
-      case 'ports': return ports.filter(p => p.status === 'running').length;
-      case 'terminal': return terminals.length;
+      case 'ports': return ports.length;
       default: return 0;
     }
   };
@@ -362,7 +450,7 @@ Type 'help' for available commands.`,
                   ))}
                   <button 
                     className={styles.addTerminalButton}
-                    onClick={createNewTerminal}
+                    onClick={() => createNewTerminal()}
                     title="Add Terminal"
                   >
                     +
@@ -415,7 +503,7 @@ Type 'help' for available commands.`,
           <div className={styles.tabContent}>
             <div className={styles.problemsHeader}>
               <div className={styles.problemsTitle}>
-                <span>Problems ({problems.length})</span>
+                <span>Problems ({problemsData.totalProblems})</span>
                 {isAnalyzing && <span className={styles.analyzing}>🔄 Analyzing...</span>}
               </div>
               <div className={styles.problemsActions}>
@@ -429,38 +517,70 @@ Type 'help' for available commands.`,
                 </button>
                 <button 
                   className={styles.actionButton} 
-                  title="Clear All"
-                  onClick={() => setProblems([])}
+                  title="Clear Problems"
+                  onClick={() => setProblemsData({ fileGroups: [], totalProblems: 0 })}
                 >
                   🗑️
                 </button>
               </div>
             </div>
-            <div className={styles.problemsList}>
-              {problems.length === 0 && !isAnalyzing ? (
-                <div className={styles.noProblems}>
-                  <div className={styles.noProblemsIcon}>✅</div>
-                  <div className={styles.noProblemsText}>
-                    {workspacePath ? 'No problems detected in workspace' : 'Open a workspace to analyze for problems'}
+            
+            {problemsData.fileGroups.length === 0 ? (
+              <div className={styles.emptyState}>
+                {isAnalyzing ? (
+                  <div>
+                    <div className={styles.loadingSpinner}>⚡</div>
+                    <div>Analyzing workspace...</div>
                   </div>
-                </div>
-              ) : (
-                problems.map((problem, index) => (
-                  <div key={problem.id || index} className={`${styles.problemItem} ${styles[problem.type]}`}>
-                    <div className={styles.problemIcon}>
-                      {problem.type === 'error' ? '❌' : problem.type === 'warning' ? '⚠️' : 'ℹ️'}
-                    </div>
-                    <div className={styles.problemDetails}>
-                      <div className={styles.problemMessage}>{problem.message}</div>
-                      <div className={styles.problemLocation}>
-                        {problem.file?.replace(workspacePath + '/', '') || problem.file}:{problem.line}:{problem.column || 1}
+                ) : (
+                  <div>
+                    <div>🎉</div>
+                    <div>No problems found</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className={styles.problemsList}>
+                {problemsData.fileGroups.map((group) => {
+                  const isCollapsed = collapsedGroups.has(group.filePath);
+                  return (
+                    <div key={group.filePath} className={styles.fileGroup}>
+                      <div 
+                        className={styles.fileHeader}
+                        onClick={() => toggleGroupCollapse(group.filePath)}
+                      >
+                        <span className={styles.collapseIcon}>
+                          {isCollapsed ? '▶' : '▼'}
+                        </span>
+                        <span className={styles.fileIcon}>{group.icon}</span>
+                        <span className={styles.fileName}>{group.fileName}</span>
+                        <span className={styles.filePath}>{group.filePath}</span>
+                        <span className={styles.problemCount}>({group.problemCount})</span>
                       </div>
-                      <div className={styles.problemSource}>{problem.source || 'Code Analyzer'}</div>
+                      
+                      {!isCollapsed && (
+                        <div className={styles.problemsGroup}>
+                          {group.problems.map((problem, index) => (
+                            <div 
+                              key={`${group.filePath}-${index}`} 
+                              className={styles.problemItem}
+                              onClick={() => handleProblemClick(problem)}
+                            >
+                              <span className={`${styles.problemIcon} ${styles[problem.type]}`}>
+                                {problem.type === 'error' ? '❌' : problem.type === 'warning' ? '⚠️' : 'ℹ️'}
+                              </span>
+                              <span className={styles.problemMessage}>
+                                {problem.message}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
 
@@ -530,28 +650,242 @@ Type 'help' for available commands.`,
     }
   };
 
+  // Navigation handlers
+  const openFileInEditor = useCallback(async (filePath: string, line?: number, column?: number) => {
+    try {
+      console.log('🔄 Opening file in editor:', filePath);
+      
+      // Check if tab already exists
+      const existingTabIndex = codeTabs.findIndex(tab => tab.path === filePath);
+      
+      if (existingTabIndex >= 0) {
+        // Switch to existing tab
+        const existingTab = codeTabs[existingTabIndex];
+        console.log('✅ Switching to existing tab:', existingTab.name);
+        setActiveCodeTab(existingTab.id);
+        setCodeTabs(prev => prev.map(tab => ({
+          ...tab,
+          isActive: tab.id === existingTab.id
+        })));
+      } else {
+        // Create new tab for file
+        const fileName = filePath.split('/').pop() || filePath;
+        const fileLanguage = getLanguageFromPath(filePath);
+        
+        console.log('➕ Creating new tab:', fileName, 'Language:', fileLanguage);
+        
+        const newTab: CodeTab = {
+          id: `tab-${Date.now()}`,
+          name: fileName,
+          path: filePath,
+          content: '',
+          language: fileLanguage,
+          isActive: true,
+          isDirty: false
+        };
+
+        // Load file content
+        try {
+          const content = await invoke('read_file_content', {
+            filePath: filePath
+          }) as string;
+          newTab.content = content;
+          console.log('✅ File content loaded successfully');
+        } catch (contentError) {
+          console.warn('⚠️ Could not load file content, using placeholder');
+          newTab.content = `// Could not load file: ${filePath}\n// File may not exist or is not accessible`;
+        }
+
+        // Deactivate all other tabs and add new tab
+        setCodeTabs(prev => [...prev.map(tab => ({ ...tab, isActive: false })), newTab]);
+        setActiveCodeTab(newTab.id);
+        console.log('✅ New tab created and activated');
+      }
+
+      // Navigate to line/column if specified (for error/problem navigation)
+      if (line && column) {
+        console.log(`🎯 Navigating to line ${line}, column ${column}`);
+        // This will be handled by CodeEditor component scroll logic
+        // We can pass line/column info to editor later
+      }
+
+    } catch (error) {
+      console.error('❌ Failed to open file in editor:', error);
+    }
+  }, [codeTabs, activeCodeTab]);
+
+  const closeCodeTab = (tabId: string) => {
+    console.log('🗑️ Closing tab:', tabId);
+    setCodeTabs(prev => {
+      const filtered = prev.filter(tab => tab.id !== tabId);
+      
+      // If we're closing the active tab, switch to another tab
+      if (activeCodeTab === tabId) {
+        if (filtered.length > 0) {
+          // Find the tab that was to the right of the closed tab, or the rightmost tab
+          const closedTabIndex = prev.findIndex(tab => tab.id === tabId);
+          let newActiveTab;
+          
+          if (closedTabIndex < filtered.length) {
+            // Tab to the right exists
+            newActiveTab = filtered[closedTabIndex];
+          } else {
+            // Use the rightmost tab
+            newActiveTab = filtered[filtered.length - 1];
+          }
+          
+          setActiveCodeTab(newActiveTab.id);
+          return filtered.map(tab => ({
+            ...tab,
+            isActive: tab.id === newActiveTab.id
+          }));
+        } else {
+          // No tabs left
+          setActiveCodeTab('');
+          return filtered;
+        }
+      }
+      
+      return filtered;
+    });
+  };
+
+  const switchCodeTab = (tabId: string) => {
+    console.log('🔄 Switching to tab:', tabId);
+    setActiveCodeTab(tabId);
+    setCodeTabs(prev => prev.map(tab => ({
+      ...tab,
+      isActive: tab.id === tabId
+    })));
+  };
+
+  const getLanguageFromPath = (filePath: string): string => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'ts': return 'typescript';
+      case 'tsx': return 'typescript';
+      case 'js': return 'javascript';
+      case 'jsx': return 'javascript';
+      case 'py': return 'python';
+      case 'rs': return 'rust';
+      case 'json': return 'json';
+      case 'css': return 'css';
+      case 'html': return 'html';
+      default: return 'text';
+    }
+  };
+
+  const getLanguageIcon = (language: string): string => {
+    switch (language.toLowerCase()) {
+      case 'typescript': return 'TS';
+      case 'javascript': return 'JS';
+      case 'python': return 'PY';
+      case 'rust': return 'RS';
+      case 'json': return 'JSON';
+      case 'css': return 'CSS';
+      case 'html': return 'HTML';
+      default: return '📄';
+    }
+  };
+
+  const toggleGroupCollapse = (groupPath: string) => {
+    setCollapsedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupPath)) {
+        newSet.delete(groupPath);
+      } else {
+        newSet.add(groupPath);
+      }
+      return newSet;
+    });
+  };
+
+  const handleProblemClick = (problem: Problem) => {
+    console.log('🔍 Clicked on problem:', problem.message, 'File:', problem.file);
+    // Navigate to file and line - this will automatically open tab and switch to it
+    openFileInEditor(problem.file, problem.line, problem.column);
+  };
+
+  // Expose openFileInEditor globally for FileExplorer
+  useEffect(() => {
+    const handleOpenFileInEditor = (event: CustomEvent) => {
+      const filePath = event.detail.filePath;
+      const line = event.detail.line;
+      const column = event.detail.column;
+      console.log('📂 MainPanel: Received file open event for:', filePath);
+      openFileInEditor(filePath, line, column);
+    };
+
+    // Listen for custom events
+    window.addEventListener('open-file-in-editor', handleOpenFileInEditor as EventListener);
+
+    // Expose function globally
+    (window as any).openFileInEditor = openFileInEditor;
+
+    return () => {
+      window.removeEventListener('open-file-in-editor', handleOpenFileInEditor as EventListener);
+      delete (window as any).openFileInEditor;
+    };
+  }, [openFileInEditor]);
+
   return (
     <div className={styles.container}>
-      <PanelGroup direction="vertical" className={styles.panelGroup}>
-        {/* Editor Panel */}
-        <Panel defaultSize={70} minSize={30} className={styles.editorPanelWrapper}>
-          <div className={styles.editorPanel}>
-            <div className={styles.panelHeader}>
-              <span className={styles.fileName}>
-                {filePath ? getFileName(filePath) : 'No file opened'}
-                {isDirty && ' ●'}
-              </span>
-              <span className={`${styles.language} text-glow-pink`}>
-                {languageDisplay} {isDirty ? '(Chưa lưu)' : '(Đã lưu)'}
-              </span>
-            </div>
-            <CodeEditor
-              value={fileContent || '// Chọn file để bắt đầu chỉnh sửa\n// File -> Open File hoặc File -> Open Folder'}
-              onChange={handleEditorChange}
-              language={language}
-            />
+      {/* Code Tabs Bar - Positioned at top like VS Code */}
+      {codeTabs.length > 0 && (
+        <div className={styles.codeTabsContainer}>
+          <div className={styles.codeTabsBar}>
+            {codeTabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={`${styles.codeTab} ${tab.isActive ? styles.activeTab : ''}`}
+                onClick={() => switchCodeTab(tab.id)}
+                title={tab.path} // Show full path on hover
+              >
+                <span className={styles.tabIcon}>
+                  {getLanguageIcon(tab.language)}
+                </span>
+                <span className={styles.tabName}>{tab.name}</span>
+                {tab.isDirty && <span className={styles.tabDirty}>●</span>}
+                <button
+                  className={styles.tabCloseButton}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeCodeTab(tab.id);
+                  }}
+                  title="Close tab"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
-        </Panel>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className={styles.mainContent}>
+        <PanelGroup direction="vertical" className={styles.panelGroup}>
+          {/* Editor Panel */}
+          <Panel defaultSize={70} minSize={30} className={styles.editorPanelWrapper}>
+            <div className={styles.editorPanel}>
+              {/* Editor Content - show content of active tab or default */}
+              {codeTabs.length > 0 ? (
+                // Show content from active tab
+                <CodeEditor
+                  value={codeTabs.find(tab => tab.isActive)?.content || '// No content available'}
+                  onChange={handleEditorChange}
+                  language={codeTabs.find(tab => tab.isActive)?.language || 'text'}
+                />
+              ) : (
+                // Show default content when no tabs open
+                <CodeEditor
+                  value={'// Không có file nào được mở\n// Click vào lỗi trong Problems panel để mở file\n// Hoặc dùng File Explorer để mở file'}
+                  onChange={handleEditorChange}
+                  language="text"
+                />
+              )}
+            </div>
+          </Panel>
         
         <PanelResizeHandle className={styles.resizeHandle} />
 
@@ -592,6 +926,7 @@ Type 'help' for available commands.`,
           </div>
         </Panel>
       </PanelGroup>
+      </div>
     </div>
   );
 };

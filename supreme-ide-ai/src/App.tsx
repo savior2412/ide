@@ -74,6 +74,19 @@ function App() {
 
   const handleFileSelect = async (filePath: string) => {
     try {
+      console.log('📂 App: File selected from FileExplorer:', filePath);
+      
+      // Trigger event for MainPanel to handle tab opening
+      const event = new CustomEvent('open-file-in-editor', {
+        detail: { 
+          filePath: filePath,
+          line: 1,
+          column: 1
+        }
+      });
+      window.dispatchEvent(event);
+      
+      // Also update currentFile for backward compatibility
       const content = await invoke<string>('open_file', { path: filePath });
       const language = getLanguageFromExtension(filePath);
       setCurrentFile({ path: filePath, content, language });
