@@ -5,10 +5,8 @@ use serde::{Serialize, Deserialize};
 use tauri::command;
 use tauri_plugin_dialog::DialogExt;
 use serde_json;
-use std::collections::HashMap;
-use regex;
-use std::os::unix::fs::PermissionsExt;
-use serde_json::{json, Value as JsonValue};
+use serde_json::json;
+use std::collections::{HashSet, HashMap};
 use regex::Regex;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -614,12 +612,12 @@ fn analyze_workspace_problems(workspace_path: String) -> Result<serde_json::Valu
 
 fn analyze_typescript_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(file_path)?;
-    let file_path_str = file_path.to_string_lossy().to_string();
+    let _file_path_str = file_path.to_string_lossy().to_string();
     
     // Collect imports and declarations
-    let mut imports = std::collections::HashSet::new();
-    let mut declared_vars = std::collections::HashSet::new();
-    let mut interfaces = std::collections::HashSet::new();
+    let mut imports = HashSet::new();
+    let mut declared_vars = HashSet::new();
+    let mut interfaces = HashSet::new();
     
     // First pass: collect imports, variables, and interfaces
     for line in content.lines() {
@@ -686,12 +684,16 @@ fn analyze_typescript_file(file_path: &Path, problems: &mut Vec<serde_json::Valu
                 
                 problems.push(json!({
                     "type": "error",
+                    "severity": "error",
                     "file": file_path.to_string_lossy().to_string(),
                     "line": line_number,
                     "column": col,
-                    "message": format!("{} {} [Ln {}, Col {}]", message, error_code, line_number, col),
+                    "message": message,
+                    "code": error_code,
                     "source": "ts",
-                    "code": error_code
+                    "category": "TypeScript Compiler",
+                    "quickFix": Some(format!("Declare variable '{}' or check spelling", word)),
+                    "relatedInformation": Some(format!("Variable '{}' is not defined in current scope", word))
                 }));
             }
         }
@@ -710,8 +712,8 @@ fn analyze_python_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) 
     let file_path_str = file_path.to_string_lossy().to_string();
     
     // Extract all variable declarations
-    let mut declared_vars = std::collections::HashSet::new();
-    let mut imported_modules = std::collections::HashSet::new();
+    let mut declared_vars = HashSet::new();
+    let mut imported_modules = HashSet::new();
     
     for line in content.lines() {
         let trimmed = line.trim();
@@ -739,13 +741,17 @@ fn analyze_python_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) 
             if let Some(var_name) = extract_variable_from_print(trimmed) {
                 if !declared_vars.contains(&var_name) && !is_builtin_python(&var_name) {
                     problems.push(serde_json::json!({
-                        "id": format!("{}:{}:undefined", file_path_str, line_number),
                         "type": "error",
-                        "message": format!("'{}' is not defined", var_name),
+                        "severity": "error",
                         "file": file_path_str,
                         "line": line_number,
                         "column": trimmed.find(&var_name).unwrap_or(0) + 1,
-                        "source": "Python Analyzer"
+                        "message": format!("Name '{}' is not defined", var_name),
+                        "code": "F821", // Flake8 undefined name
+                        "source": "Pylance",
+                        "category": "Python Language Server",
+                        "quickFix": Some(format!("Define variable '{}' before use", var_name)),
+                        "relatedInformation": Some("reportUndefinedVariable".to_string())
                     }));
                 }
             }
@@ -757,13 +763,17 @@ fn analyze_python_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) 
             if let Some(import) = import_name {
                 if !is_python_import_used(&import, &content) {
                     problems.push(serde_json::json!({
-                        "id": format!("{}:{}:unused-import", file_path_str, line_number),
                         "type": "warning",
-                        "message": format!("Unused import '{}'", import),
+                        "severity": "warning",
                         "file": file_path_str,
                         "line": line_number,
                         "column": 1,
-                        "source": "Python Analyzer"
+                        "message": format!("'{}' is imported but unused", import),
+                        "code": "F401", // Flake8 unused import
+                        "source": "Pylance",
+                        "category": "Python Language Server",
+                        "quickFix": Some(format!("Remove unused import '{}'", import)),
+                        "relatedInformation": Some("reportUnusedImport".to_string())
                     }));
                 }
             }
@@ -990,84 +1000,11 @@ fn is_ts_keyword(name: &str) -> bool {
     ["function", "const", "let", "var", "if", "else", "for", "while", "do", "switch", "case", "default", "break", "continue", "return", "try", "catch", "finally", "throw", "class", "interface", "extends", "implements", "import", "export", "from", "as", "default", "async", "await", "yield", "typeof", "instanceof", "new", "this", "super", "null", "undefined", "true", "false"].contains(&name)
 }
 
-fn is_ts_variable_used(var_name: &str, content: &str, declaration_line: usize) -> bool {
-    for (line_num, line) in content.lines().enumerate() {
-        let line_number = line_num + 1;
-        if line_number != declaration_line && line.contains(var_name) {
-            return true;
-        }
-    }
-    false
-}
 
-// CSS analyzer
-fn analyze_css_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
-    let content = fs::read_to_string(file_path)?;
-    let file_path_str = file_path.to_string_lossy().to_string();
-    
-    for (line_num, line) in content.lines().enumerate() {
-        let line_number = line_num + 1;
-        let trimmed = line.trim();
-        
-        // Check for missing semicolons in CSS
-        if trimmed.contains(':') && !trimmed.ends_with(';') && !trimmed.ends_with('{') && !trimmed.ends_with('}') && !trimmed.is_empty() && !trimmed.starts_with("/*") {
-            problems.push(serde_json::json!({
-                "id": format!("{}:{}:css-semicolon", file_path_str, line_number),
-                "type": "warning",
-                "message": "Missing semicolon in CSS declaration",
-                "file": file_path_str,
-                "line": line_number,
-                "column": trimmed.len(),
-                "source": "CSS Analyzer"
-            }));
-        }
-    }
-    
-    Ok(())
-}
 
-// JSON analyzer
-fn analyze_json_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
-    let content = fs::read_to_string(file_path)?;
-    let file_path_str = file_path.to_string_lossy().to_string();
-    
-    // Try to parse JSON
-    match serde_json::from_str::<serde_json::Value>(&content) {
-        Err(e) => {
-            problems.push(serde_json::json!({
-                "id": format!("{}:json-syntax", file_path_str),
-                "type": "error",
-                "message": format!("JSON syntax error: {}", e),
-                "file": file_path_str,
-                "line": 1,
-                "column": 1,
-                "source": "JSON Analyzer"
-            }));
-        }
-        Ok(_) => {
-            // JSON is valid, check for potential issues
-            for (line_num, line) in content.lines().enumerate() {
-                let line_number = line_num + 1;
-                let trimmed = line.trim();
-                
-                // Check for trailing commas (not allowed in strict JSON)
-                if trimmed.ends_with(",}") || trimmed.ends_with(",]") {
-                    problems.push(serde_json::json!({
-                        "id": format!("{}:{}:trailing-comma", file_path_str, line_number),
-                        "type": "warning",
-                        "message": "Trailing comma in JSON (not allowed in strict JSON)",
-                        "file": file_path_str,
-                        "line": line_number,
-                        "column": trimmed.len() - 1,
-                        "source": "JSON Analyzer"
-                    }));
-                }
-            }
-        }
-    }
-    
-    Ok(())
-}
+
+
+
 
 #[tauri::command]
 fn refresh_file_tree(workspace_path: String) -> Result<Vec<FileEntry>, String> {

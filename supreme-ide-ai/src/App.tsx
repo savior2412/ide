@@ -177,7 +177,6 @@ function App() {
             <MainPanel 
               filePath={currentFile?.path}
               fileContent={currentFile?.content || ''}
-              language={currentFile?.language || 'text'}
               isDirty={isDirty}
               onContentChange={handleContentChange}
               workspacePath={workspacePath}

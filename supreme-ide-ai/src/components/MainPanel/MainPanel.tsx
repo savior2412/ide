@@ -3,7 +3,6 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { invoke } from '@tauri-apps/api/core';
 import styles from './MainPanel.module.css';
 import CodeEditor from '../CodeEditor/CodeEditor';
-import { getLanguageDisplayName } from '../../utils/fileUtils';
 
 interface TerminalSession {
   id: string;
@@ -13,13 +12,17 @@ interface TerminalSession {
 }
 
 interface Problem {
-  id?: string;
   type: 'error' | 'warning' | 'info';
+  severity: 'error' | 'warning' | 'info';
   file: string;
   line: number;
-  column?: number;
+  column: number;
   message: string;
-  source?: string;
+  code?: string;
+  source: string;
+  category?: string;
+  quickFix?: string;
+  relatedInformation?: string;
 }
 
 interface FileGroup {
@@ -69,7 +72,6 @@ interface CodeTab {
 interface MainPanelProps {
   filePath?: string;
   fileContent: string;
-  language: string;
   isDirty: boolean;
   onContentChange: (content: string) => void;
   workspacePath?: string;
@@ -77,7 +79,7 @@ interface MainPanelProps {
 
 type BottomTabType = 'terminal' | 'problems' | 'output' | 'debug' | 'ports';
 
-const MainPanel = ({ filePath, fileContent, language, isDirty, onContentChange, workspacePath }: MainPanelProps) => {
+const MainPanel = ({ filePath, fileContent, isDirty, onContentChange, workspacePath }: MainPanelProps) => {
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string>('');
   const [terminalInput, setTerminalInput] = useState('');
@@ -205,6 +207,39 @@ Type 'help' for available commands.`,
     if (workspacePath) {
       analyzeWorkspaceProblems();
     }
+  }, [workspacePath]);
+
+  // Realtime error detection - refresh problems every 5 seconds
+  useEffect(() => {
+    if (!workspacePath) return;
+
+    const interval = setInterval(() => {
+      console.log('🔄 MainPanel: Auto-refreshing problems...');
+      analyzeWorkspaceProblems();
+    }, 5000); // Refresh every 5 seconds
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [workspacePath]);
+
+  // Listen for file changes to trigger immediate problem refresh
+  useEffect(() => {
+    const handleFileChange = () => {
+      if (workspacePath) {
+        console.log('📝 File change detected, refreshing problems...');
+        setTimeout(() => {
+          analyzeWorkspaceProblems();
+        }, 1000); // 1 second delay to allow file save to complete
+      }
+    };
+
+    // Listen for editor content changes
+    window.addEventListener('file-changed', handleFileChange);
+    
+    return () => {
+      window.removeEventListener('file-changed', handleFileChange);
+    };
   }, [workspacePath]);
 
   // Auto-refresh problems when file content changes
@@ -373,9 +408,7 @@ Type 'help' for available commands.`,
     }, 100);
   }, []);
 
-  const getFileName = (filePath: string): string => {
-    return filePath.split('/').pop() || 'Untitled';
-  };
+
 
   const getWorkspaceName = (): string => {
     return workspacePath ? workspacePath.split('/').pop() || 'Workspace' : 'No Workspace';
@@ -395,9 +428,20 @@ Type 'help' for available commands.`,
 
   const handleEditorChange = (value: string | undefined) => {
     onContentChange(value || '');
+    
+    // Update active tab content and mark as dirty
+    setCodeTabs(prev => prev.map(tab => {
+      if (tab.isActive) {
+        return { ...tab, content: value || '', isDirty: true };
+      }
+      return tab;
+    }));
+    
+    // Emit file change event for realtime error detection
+    const event = new CustomEvent('file-changed');
+    window.dispatchEvent(event);
   };
 
-  const languageDisplay = getLanguageDisplayName(language);
   const activeTerminal = terminals.find(t => t.id === activeTerminalId);
 
   const getTabCount = (tab: BottomTabType) => {
@@ -563,15 +607,36 @@ Type 'help' for available commands.`,
                           {group.problems.map((problem, index) => (
                             <div 
                               key={`${group.filePath}-${index}`} 
-                              className={styles.problemItem}
+                              className={`${styles.problemItem} ${styles[problem.severity]}`}
                               onClick={() => handleProblemClick(problem)}
+                              title={problem.quickFix || problem.relatedInformation}
                             >
-                              <span className={`${styles.problemIcon} ${styles[problem.type]}`}>
-                                {problem.type === 'error' ? '❌' : problem.type === 'warning' ? '⚠️' : 'ℹ️'}
-                              </span>
-                              <span className={styles.problemMessage}>
-                                {problem.message}
-                              </span>
+                              <div className={styles.problemHeader}>
+                                <span className={`${styles.problemIcon} ${styles[problem.severity]}`}>
+                                  {getProblemIcon(problem.severity)}
+                                </span>
+                                <span className={styles.sourceIcon}>
+                                  {getSourceIcon(problem.source)}
+                                </span>
+                                <span className={styles.problemLocation}>
+                                  [Ln {problem.line}, Col {problem.column}]
+                                </span>
+                              </div>
+                              <div className={styles.problemContent}>
+                                <span className={styles.problemMessage}>
+                                  {problem.message}
+                                </span>
+                                {problem.code && (
+                                  <span className={styles.problemCode}>
+                                    {problem.code}
+                                  </span>
+                                )}
+                              </div>
+                              {problem.category && (
+                                <div className={styles.problemCategory}>
+                                  {problem.category}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -703,10 +768,15 @@ Type 'help' for available commands.`,
       }
 
       // Navigate to line/column if specified (for error/problem navigation)
-      if (line && column) {
-        console.log(`🎯 Navigating to line ${line}, column ${column}`);
-        // This will be handled by CodeEditor component scroll logic
-        // We can pass line/column info to editor later
+      if (line !== undefined) {
+        console.log(`🎯 Navigating to line ${line}, column ${column || 1}`);
+        // Emit event for CodeEditor to scroll to line
+        setTimeout(() => {
+          const event = new CustomEvent('scroll-to-line', {
+            detail: { line, column: column || 1 }
+          });
+          window.dispatchEvent(event);
+        }, existingTabIndex >= 0 ? 100 : 300); // Longer delay for new tabs
       }
 
     } catch (error) {
@@ -800,11 +870,46 @@ Type 'help' for available commands.`,
     });
   };
 
+  const getProblemIcon = (severity: string) => {
+    switch (severity) {
+      case 'error':
+        return '❌';
+      case 'warning':
+        return '⚠️';
+      case 'info':
+        return 'ℹ️';
+      default:
+        return '•';
+    }
+  };
+
+
+
+  const getSourceIcon = (source: string) => {
+    switch (source.toLowerCase()) {
+      case 'ts':
+      case 'typescript':
+        return '🟦';
+      case 'pylance':
+      case 'python':
+        return '🐍';
+      case 'rust':
+        return '🦀';
+      case 'javascript':
+      case 'js':
+        return '🟨';
+      default:
+        return '📄';
+    }
+  };
+
   const handleProblemClick = (problem: Problem) => {
     console.log('🔍 Clicked on problem:', problem.message, 'File:', problem.file);
     // Navigate to file and line - this will automatically open tab and switch to it
     openFileInEditor(problem.file, problem.line, problem.column);
   };
+
+
 
   // Expose openFileInEditor globally for FileExplorer
   useEffect(() => {
@@ -826,7 +931,7 @@ Type 'help' for available commands.`,
       window.removeEventListener('open-file-in-editor', handleOpenFileInEditor as EventListener);
       delete (window as any).openFileInEditor;
     };
-  }, [openFileInEditor]);
+  }, []);
 
   return (
     <div className={styles.container}>

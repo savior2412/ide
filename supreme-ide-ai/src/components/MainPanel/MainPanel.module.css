@@ -499,39 +499,81 @@
 
 .problemItem {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px 8px 40px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 10px 40px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 3px solid transparent;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
   font-size: 13px;
 }
 
 .problemItem:hover {
   background: rgba(0, 212, 255, 0.05);
+  border-left-color: #00d4ff;
 }
 
 .problemItem:last-child {
   border-bottom: none;
 }
 
+.problemItem.error {
+  border-left-color: #ff4757;
+}
+
+.problemItem.warning {
+  border-left-color: #ffa502;
+}
+
+.problemItem.info {
+  border-left-color: #70a1ff;
+}
+
+.problemHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.problemContent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
 .problemIcon {
   font-size: 12px;
   min-width: 16px;
-  margin-top: 2px;
 }
 
 .problemIcon.error {
-  color: #ff6b6b;
+  color: #ff4757;
 }
 
 .problemIcon.warning {
-  color: #ffd93d;
+  color: #ffa502;
 }
 
 .problemIcon.info {
-  color: #00d4ff;
+  color: #70a1ff;
+}
+
+.sourceIcon {
+  font-size: 14px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.problemLocation {
+  color: #888;
+  font-family: 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .problemMessage {
@@ -540,6 +582,24 @@
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
   line-height: 1.4;
   word-break: break-word;
+}
+
+.problemCode {
+  color: #00d4ff;
+  font-family: 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  background: rgba(0, 212, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.problemCategory {
+  color: #666;
+  font-size: 10px;
+  font-style: italic;
+  margin-top: 2px;
+  padding-left: 24px;
 }
 
 .emptyState {
@@ -773,23 +833,25 @@
   background: rgba(0, 0, 0, 0.3);
   border-bottom: 1px solid rgba(0, 212, 255, 0.2);
   overflow-x: auto;
+  overflow-y: hidden;
   padding: 0;
   width: 100%;
   position: relative;
   z-index: 10;
   min-height: 40px;
   height: 40px;
+  flex-shrink: 0;
 }
 
 .codeTabsBar {
   display: flex;
   align-items: center;
   gap: 0;
-  width: 100%;
+  min-width: max-content;
   min-height: 40px;
   height: 40px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 .mainContent {
@@ -811,11 +873,16 @@
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
-  min-width: 150px;
-  max-width: 250px;
+  min-width: 180px;
+  max-width: 300px;
+  width: auto;
   height: 40px;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: 14px;
+  flex-shrink: 0;
+  flex-grow: 0;
+  color: #94a3b8;
+  position: relative;
 }
 
 .codeTab:hover {
@@ -847,6 +914,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.2;
+  min-width: 80px;
+  max-width: 180px;
 }
 
 .tabDirty {
@@ -873,4 +942,24 @@
 .tabCloseButton:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ff6b6b;
+}
+
+/* Code Tabs Scrollbar */
+.codeTabsContainer::-webkit-scrollbar {
+  height: 6px;
+}
+
+.codeTabsContainer::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.codeTabsContainer::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.codeTabsContainer::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.5);
 }
