@@ -1,11 +1,10 @@
 import { Window } from '@tauri-apps/api/window';
 import styles from './TitleBar.module.css';
-import { invoke } from '@tauri-apps/api/core';
 import { useState, useEffect, useRef } from 'react';
 
 interface TitleBarProps {
-  onOpenFolder: (tree: any) => void;
-  onOpenFile: (path: string, content: string) => void;
+  onOpenFolder: () => void;
+  onOpenFile: () => void;
   onSave: () => void;
   onSaveAs: () => void;
 }
@@ -13,7 +12,7 @@ interface TitleBarProps {
 const TitleBar = ({ onOpenFolder, onOpenFile, onSave, onSaveAs }: TitleBarProps) => {
   const appWindow = Window.getCurrent();
   const [showFileMenu, setShowFileMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -44,10 +43,10 @@ const TitleBar = ({ onOpenFolder, onOpenFile, onSave, onSaveAs }: TitleBarProps)
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Click outside to close menu
+  // Click outside to close menus
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
         setShowFileMenu(false);
       }
     };
@@ -63,8 +62,7 @@ const TitleBar = ({ onOpenFolder, onOpenFile, onSave, onSaveAs }: TitleBarProps)
 
   const handleOpenFolder = async () => {
     try {
-      const tree = await invoke('open_folder');
-      onOpenFolder(tree);
+      onOpenFolder();
       setShowFileMenu(false);
     } catch (e) { 
       console.error('Không thể mở thư mục:', e);
@@ -73,9 +71,7 @@ const TitleBar = ({ onOpenFolder, onOpenFile, onSave, onSaveAs }: TitleBarProps)
   
   const handleOpenFile = async () => {
     try {
-      const result = await invoke('open_file_dialog') as [string, string];
-      const [path, content] = result;
-      onOpenFile(path, content);
+      onOpenFile();
       setShowFileMenu(false);
     } catch (e) { 
       console.error('Không thể mở file:', e);
@@ -95,9 +91,9 @@ const TitleBar = ({ onOpenFolder, onOpenFile, onSave, onSaveAs }: TitleBarProps)
   return (
     <div className={styles.container} data-tauri-drag-region>
       <div className={styles.menu}>
-        <div ref={menuRef} style={{ position: 'relative' }}>
+        <div ref={fileMenuRef} style={{ position: 'relative' }}>
           <span
-            className={`${styles.menuItem} ${styles.active} text-glow-cyan`}
+            className={`${styles.menuItem} ${showFileMenu ? styles.active : ''} text-glow-cyan`}
             onClick={() => setShowFileMenu((v) => !v)}
           >File</span>
           {showFileMenu && (

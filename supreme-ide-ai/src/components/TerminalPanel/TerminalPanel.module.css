@@ -1,0 +1,644 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-cyan);
+}
+
+.tabBar {
+  display: flex;
+  background: rgba(11, 23, 39, 0.8);
+  border-bottom: 1px solid var(--color-border-cyan);
+  padding: 0;
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.tab:hover {
+  background: rgba(0, 212, 255, 0.1);
+  color: #00d4ff;
+}
+
+.activeTab {
+  color: #00d4ff !important;
+  border-bottom-color: #00d4ff;
+  background: rgba(0, 212, 255, 0.05);
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+}
+
+.tabIcon {
+  font-size: 14px;
+}
+
+.tabLabel {
+  font-weight: 500;
+}
+
+.content {
+  flex: 1;
+  overflow: hidden;
+  background: var(--color-bg-surface);
+}
+
+.tabContent {
+  padding: 16px;
+  color: #9ca3af;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Terminal specific styles */
+.terminalContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-surface);
+}
+
+.terminalOutput {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #e6edf3;
+}
+
+.terminalLine {
+  margin: 0;
+  padding: 1px 0;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.inputLine {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.02);
+}
+
+.prompt {
+  color: #00d4ff;
+  font-weight: 600;
+  margin-right: 8px;
+  text-shadow: 0 0 4px rgba(0, 212, 255, 0.6);
+  flex-shrink: 0;
+}
+
+.terminalInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e6edf3;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 13px;
+  padding: 2px 4px;
+}
+
+.terminalInput::placeholder {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.terminalInput:focus {
+  background: rgba(0, 212, 255, 0.05);
+  box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.3);
+  border-radius: 2px;
+}
+
+/* Scrollbar styling */
+.terminalOutput::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminalOutput::-webkit-scrollbar-track {
+  background: var(--color-bg-surface);
+}
+
+.terminalOutput::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 4px;
+}
+
+.terminalOutput::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.5);
+}
+
+.tabCount {
+  background: rgba(255, 0, 255, 0.8);
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 4px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* Problems Tab Styles */
+.problemsContainer {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.problemsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.problemsHeader h3 {
+  color: #00d4ff;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.clearButton {
+  background: rgba(255, 0, 255, 0.1);
+  border: 1px solid rgba(255, 0, 255, 0.3);
+  color: #ff00ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clearButton:hover {
+  background: rgba(255, 0, 255, 0.2);
+  box-shadow: 0 0 8px rgba(255, 0, 255, 0.4);
+}
+
+.problemsList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.problemItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  border-left: 3px solid;
+  transition: all 0.2s ease;
+}
+
+.problemError {
+  border-left-color: #ff4757;
+  background: rgba(255, 71, 87, 0.1);
+}
+
+.problemWarning {
+  border-left-color: #ffa502;
+  background: rgba(255, 165, 2, 0.1);
+}
+
+.problemInfo {
+  border-left-color: #3742fa;
+  background: rgba(55, 66, 250, 0.1);
+}
+
+.problemIcon {
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+.problemContent {
+  flex: 1;
+}
+
+.problemMessage {
+  color: #e6edf3;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.problemLocation {
+  color: #8b949e;
+  font-size: 11px;
+  font-family: 'SF Mono', monospace;
+}
+
+/* Output Tab Styles */
+.outputContainer {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.outputHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.outputHeader h3 {
+  color: #00d4ff;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.outputControls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sourceFilter {
+  background: rgba(22, 27, 34, 0.8);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #e6edf3;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.outputList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  font-family: 'SF Mono', monospace;
+  font-size: 12px;
+}
+
+.outputItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.outputItem:hover {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.outputTimestamp {
+  color: #8b949e;
+  font-size: 11px;
+}
+
+.outputType {
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.outputBuild {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.outputCompile {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.outputTest {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+}
+
+.outputGeneral {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+
+.outputSource {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.outputMessage {
+  color: #e6edf3;
+  flex: 1;
+}
+
+/* Debug Console Styles */
+.debugContainer {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.debugHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.debugHeader h3 {
+  color: #00d4ff;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.debugControls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.debugButton {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.debugButton:hover {
+  background: rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}
+
+.debugList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  font-family: 'SF Mono', monospace;
+  font-size: 12px;
+}
+
+.debugItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.debugItem:hover {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.debugTimestamp {
+  color: #8b949e;
+  font-size: 11px;
+}
+
+.debugLevel {
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.debugLog .debugLevel {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.debugWarn .debugLevel {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.debugError .debugLevel {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.debugDebug .debugLevel {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+}
+
+.debugSource {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.debugMessage {
+  color: #e6edf3;
+  flex: 1;
+}
+
+/* Ports Tab Styles */
+.portsContainer {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.portsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.portsHeader h3 {
+  color: #00d4ff;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.addPortButton {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.addPortButton:hover {
+  background: rgba(34, 197, 94, 0.2);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+}
+
+.portsList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.portItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background: rgba(22, 27, 34, 0.6);
+  border: 1px solid rgba(48, 54, 61, 0.8);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.portItem:hover {
+  border-color: rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+}
+
+.portInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.portStatus {
+  font-size: 12px;
+}
+
+.statusRunning {
+  color: #22c55e;
+}
+
+.statusStopped {
+  color: #6b7280;
+}
+
+.statusError {
+  color: #ef4444;
+}
+
+.portNumber {
+  color: #00d4ff;
+  font-weight: 600;
+  font-family: 'SF Mono', monospace;
+}
+
+.portProtocol {
+  color: #8b949e;
+  font-size: 12px;
+}
+
+.portName {
+  color: #e6edf3;
+  font-weight: 500;
+}
+
+.portActions {
+  display: flex;
+  gap: 6px;
+}
+
+.openButton {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.openButton:hover {
+  background: rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}
+
+.stopButton {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.stopButton:hover {
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
+
+/* Empty State */
+.emptyState {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  padding: 32px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+}
+
+/* Scrollbar styling for all tab content */
+.problemsList::-webkit-scrollbar,
+.outputList::-webkit-scrollbar,
+.debugList::-webkit-scrollbar,
+.portsList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.problemsList::-webkit-scrollbar-track,
+.outputList::-webkit-scrollbar-track,
+.debugList::-webkit-scrollbar-track,
+.portsList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.problemsList::-webkit-scrollbar-thumb,
+.outputList::-webkit-scrollbar-thumb,
+.debugList::-webkit-scrollbar-thumb,
+.portsList::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 3px;
+}
+
+.problemsList::-webkit-scrollbar-thumb:hover,
+.outputList::-webkit-scrollbar-thumb:hover,
+.debugList::-webkit-scrollbar-thumb:hover,
+.portsList::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.5);
+} 

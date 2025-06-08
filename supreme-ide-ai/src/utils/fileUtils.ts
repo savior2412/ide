@@ -1,3 +1,10 @@
+export interface FileEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  children?: FileEntry[];
+}
+
 export const getLanguageFromExtension = (filePath: string): string => {
   const extension = filePath.split('.').pop()?.toLowerCase();
   
