@@ -334,51 +334,88 @@
 
 .fileGroup {
   margin-bottom: 8px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .fileHeader {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 8px 12px;
   background: #2a2a2a;
   border-bottom: 1px solid #333;
   font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.fileHeader:hover {
+  background: #323232;
+}
+
+.fileHeader .chevron {
+  color: #cccccc;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+  width: 12px;
+  text-align: center;
+}
+
+.fileHeader .chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.fileInfo {
+  flex: 1;
+  min-width: 0; /* Allow shrinking */
 }
 
 .fileName {
-  font-weight: bold;
+  font-weight: 600;
   color: #e6e6e6;
-}
-
-.filePath {
-  flex: 1;
-  color: #888;
-  font-size: 11px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.filePath {
+  color: #999;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+  opacity: 0.8;
+}
+
 .matchCount {
   color: #007acc;
   font-size: 11px;
-  font-weight: bold;
+  font-weight: 600;
+  background: rgba(0, 122, 204, 0.15);
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .matchesList {
   background: #1e1e1e;
+  border-top: 1px solid #333;
 }
 
 .codeMatch {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 8px 12px;
   border-bottom: 1px solid #2a2a2a;
   cursor: pointer;
-  transition: background-color 0.2s;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  transition: background-color 0.15s ease;
 }
 
 .codeMatch:hover {
@@ -404,21 +441,68 @@
   overflow: hidden;
 }
 
-.mainLine {
-  color: #e6e6e6;
-  font-size: 12px;
-  line-height: 1.4;
-  word-break: break-all;
-  white-space: pre-wrap;
+/* Context and main line styles */
+.contextBefore,
+.contextAfter {
+  margin: 2px 0;
 }
 
 .contextLine {
-  color: #888;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: #666;
   font-size: 11px;
-  line-height: 1.3;
-  margin-top: 2px;
-  opacity: 0.7;
+  line-height: 1.4;
+  padding: 1px 0;
+}
+
+.contextLineNumber {
+  color: #555;
+  font-size: 10px;
+  font-weight: normal;
+  min-width: 32px;
+  text-align: right;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.contextText {
+  flex: 1;
   white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.mainLine {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: #e6e6e6;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 2px 0;
+  background: rgba(0, 122, 204, 0.1);
+  margin: 1px 0;
+  border-radius: 2px;
+}
+
+.mainLineNumber {
+  color: #cccccc;
+  font-size: 11px;
+  font-weight: bold;
+  min-width: 32px;
+  text-align: right;
+  user-select: none;
+  flex-shrink: 0;
+  background: rgba(0, 122, 204, 0.2);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+.mainText {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* Empty states */

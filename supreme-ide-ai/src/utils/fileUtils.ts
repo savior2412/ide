@@ -1,8 +1,10 @@
 export interface FileEntry {
   name: string;
   path: string;
-  is_dir: boolean;
+  is_directory: boolean;
   children?: FileEntry[];
+  size?: number;
+  extension?: string;
 }
 
 export const getLanguageFromExtension = (filePath: string): string => {

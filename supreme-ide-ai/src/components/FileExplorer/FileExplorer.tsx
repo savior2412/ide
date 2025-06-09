@@ -3,6 +3,7 @@ import styles from './FileExplorer.module.css';
 import { useState, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import FileTree from './FileTree';
+import { FileEntry } from '../../utils/fileUtils';
 
 // SVG Icons as React Components for reusability
 const FileIcon = ({ extension }: { extension?: string }) => {
@@ -51,13 +52,6 @@ const ChevronIcon = ({ isOpen }: { isOpen: boolean }) => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
   </svg>
 );
-
-interface FileEntry {
-  name: string;
-  path: string;
-  is_dir: boolean;
-  children?: FileEntry[];
-}
 
 interface FileExplorerProps {
   fileTree: FileEntry[];
@@ -245,11 +239,11 @@ const FileExplorer = ({ fileTree, onFileSelect, onRefresh, workspacePath }: File
 
   const sortEntries = (entries: FileEntry[]) => {
     return [...entries].sort((a, b) => {
-      // Folders first, then files
-      if (a.is_dir && !b.is_dir) return -1;
-      if (!a.is_dir && b.is_dir) return 1;
+      // Directories first, then files
+      if (a.is_directory && !b.is_directory) return -1;
+      if (!a.is_directory && b.is_directory) return 1;
       // Then alphabetically
-      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+      return a.name.localeCompare(b.name);
     });
   };
 
@@ -532,7 +526,7 @@ const FileExplorer = ({ fileTree, onFileSelect, onRefresh, workspacePath }: File
 
         return (
           <li key={node.path} style={{ marginBottom: 1 }}>
-            {node.is_dir ? (
+            {node.is_directory ? (
               <div>
                 <div 
                   className={styles.fileItem}

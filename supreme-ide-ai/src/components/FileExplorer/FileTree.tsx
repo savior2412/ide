@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import styles from './FileTree.module.css';
+import { FileEntry } from '../../utils/fileUtils';
 
 // File icons mapping giống VS Code
 const FILE_ICONS: { [key: string]: string } = {
@@ -104,13 +105,6 @@ const FOLDER_ICONS = {
   }
 };
 
-interface FileEntry {
-  name: string;
-  path: string;
-  is_dir: boolean;
-  children?: FileEntry[];
-}
-
 interface FileTreeProps {
   fileTree: FileEntry[];
   onFileSelect: (path: string) => void;
@@ -120,30 +114,31 @@ interface FileTreeProps {
 interface SearchMatch {
   path: string;
   name: string;
-  is_dir: boolean;
+  is_directory: boolean;
   matchedText: string;
   score: number;
 }
 
 interface CodeSearchMatch {
   file_path: string;
-  file_name: string;
   line_number: number;
   line_content: string;
   match_start: number;
   match_end: number;
-  context_before?: string;
-  context_after?: string;
+  context_before: string[];
+  context_after: string[];
 }
 
 interface CodeSearchResult {
-  query: string;
+  query?: string;
   total_matches: number;
-  files_count: number;
+  files_searched: number;
   matches: CodeSearchMatch[];
 }
 
 const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePath }) => {
+  console.log(`🏠 FileTree: Received workspacePath = "${workspacePath}"`);
+  
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [activeFile, setActiveFile] = useState<string>('');
@@ -153,6 +148,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
   const [codeSearchResults, setCodeSearchResults] = useState<CodeSearchResult | null>(null);
   const [caseSensitive, setCaseSensitive] = useState<boolean>(false);
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [expandedCodeFiles, setExpandedCodeFiles] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Get file icon
@@ -187,7 +183,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
       const fullPath = path ? `${path}/${node.name}` : node.name;
       result.push({ ...node, path: fullPath });
       
-      if (node.is_dir && node.children) {
+      if (node.is_directory && node.children) {
         result = result.concat(flattenFileTree(node.children, fullPath));
       }
     }
@@ -211,7 +207,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
         results.push({
           path: file.path,
           name: file.name,
-          is_dir: file.is_dir,
+          is_directory: file.is_directory,
           matchedText: file.name,
           score: 100
         });
@@ -223,7 +219,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
         results.push({
           path: file.path,
           name: file.name,
-          is_dir: file.is_dir,
+          is_directory: file.is_directory,
           matchedText: file.name,
           score: 90
         });
@@ -235,7 +231,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
         results.push({
           path: file.path,
           name: file.name,
-          is_dir: file.is_dir,
+          is_directory: file.is_directory,
           matchedText: file.name,
           score: 80
         });
@@ -247,7 +243,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
         results.push({
           path: file.path,
           name: file.name,
-          is_dir: file.is_dir,
+          is_directory: file.is_directory,
           matchedText: file.path,
           score: 70
         });
@@ -259,7 +255,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
         results.push({
           path: file.path,
           name: file.name,
-          is_dir: file.is_dir,
+          is_directory: file.is_directory,
           matchedText: file.name,
           score: 60
         });
@@ -300,14 +296,19 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
 
     setIsSearching(true);
     try {
-      const result = await invoke<CodeSearchResult>('search_in_files', {
-        workspacePath,
+      const searchParams = {
         query: query.trim(),
-        caseSensitive,
-        useRegex: false
-      });
+        workspaceRoot: workspacePath,
+        caseSensitive: caseSensitive
+      };
+      
+      console.log(`🔍 Searching for "${query}" in workspace: ${workspacePath}`);
+      console.log(`🔍 Search parameters:`, searchParams);
+      
+      const result = await invoke<CodeSearchResult>('search_in_files', searchParams);
+      
       setCodeSearchResults(result);
-      console.log(`🔍 Found ${result.total_matches} matches in ${result.files_count} files`);
+      console.log(`✅ Found ${result.total_matches} matches in ${result.files_searched} files`);
     } catch (error) {
       console.error('❌ Code search failed:', error);
       setCodeSearchResults(null);
@@ -318,16 +319,21 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
 
   // Handle search
   useEffect(() => {
+    console.log(`🔍 Search effect triggered: query="${searchQuery}", type="${searchType}", workspace="${workspacePath}"`);
+    
     if (searchQuery.trim()) {
       setIsSearchMode(true);
       
       if (searchType === 'files') {
         // File name search
+        console.log(`📁 Performing file search for: "${searchQuery}"`);
         const results = searchFiles(searchQuery, allFiles);
+        console.log(`📁 File search results: ${results.length} matches`);
         setSearchResults(results);
         setCodeSearchResults(null);
       } else {
         // Code content search
+        console.log(`🔍 Performing code search for: "${searchQuery}"`);
         setSearchResults([]);
         searchCodeInFiles(searchQuery);
       }
@@ -335,8 +341,34 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
       setIsSearchMode(false);
       setSearchResults([]);
       setCodeSearchResults(null);
+      setExpandedCodeFiles(new Set()); // Clear expanded files when search is cleared
     }
-  }, [searchQuery, allFiles, searchType, caseSensitive, workspacePath]);
+  }, [searchQuery, searchType, caseSensitive, allFiles, workspacePath]);
+
+  // Auto-expand files with few matches for better UX
+  useEffect(() => {
+    if (codeSearchResults && codeSearchResults.matches.length > 0) {
+      const matchesByFile = codeSearchResults.matches.reduce((acc, match) => {
+        if (!acc[match.file_path]) {
+          acc[match.file_path] = [];
+        }
+        acc[match.file_path].push(match);
+        return acc;
+      }, {} as Record<string, CodeSearchMatch[]>);
+
+      const newExpandedFiles = new Set<string>();
+      
+      // Auto-expand files with 5 or fewer matches
+      Object.entries(matchesByFile).forEach(([filePath, matches]) => {
+        if (matches.length <= 5) {
+          newExpandedFiles.add(filePath);
+        }
+      });
+      
+      setExpandedCodeFiles(newExpandedFiles);
+      console.log(`📂 Auto-expanded ${newExpandedFiles.size} files with ≤5 matches`);
+    }
+  }, [codeSearchResults]);
 
   // Toggle folder expansion
   const toggleFolder = (folderPath: string) => {
@@ -351,6 +383,18 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
     });
   };
 
+  const toggleCodeFile = (filePath: string) => {
+    setExpandedCodeFiles(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(filePath)) {
+        newSet.delete(filePath);
+      } else {
+        newSet.add(filePath);
+      }
+      return newSet;
+    });
+  };
+
   // Handle file selection
   const handleFileSelect = (path: string) => {
     setActiveFile(path);
@@ -359,6 +403,10 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
 
   // Handle code search result click - open file and jump to line
   const handleCodeMatchClick = (match: CodeSearchMatch) => {
+    console.log(`🎯 FileTree: Click on search result:`, match);
+    console.log(`🎯 FileTree: File path: "${match.file_path}"`);
+    console.log(`🎯 FileTree: Line: ${match.line_number}, Column: ${match.match_start + 1}`);
+    
     setActiveFile(match.file_path);
     
     // Create event to open file and jump to specific line
@@ -371,7 +419,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
     });
     window.dispatchEvent(event);
     
-    console.log(`🎯 Jumping to ${match.file_path}:${match.line_number}:${match.match_start + 1}`);
+    console.log(`🎯 Dispatched open-file-with-location event for: ${match.file_path}:${match.line_number}:${match.match_start + 1}`);
   };
 
   // Highlight search text
@@ -409,25 +457,25 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
           className={`${styles.nodeContent} ${isActive ? styles.active : ''}`}
           style={{ paddingLeft: `${level * 20 + 8}px` }}
           onClick={() => {
-            if (node.is_dir) {
+            if (node.is_directory) {
               toggleFolder(fullPath);
             } else {
               handleFileSelect(fullPath);
             }
           }}
         >
-          {node.is_dir && (
+          {node.is_directory && (
             <span className={`${styles.chevron} ${isExpanded ? styles.expanded : ''}`}>
               ▶
             </span>
           )}
           <span className={styles.icon}>
-            {node.is_dir ? getFolderIcon(node.name, isExpanded) : getFileIcon(node.name)}
+            {node.is_directory ? getFolderIcon(node.name, isExpanded) : getFileIcon(node.name)}
           </span>
           <span className={styles.name}>{node.name}</span>
         </div>
         
-        {node.is_dir && isExpanded && node.children && (
+        {node.is_directory && isExpanded && node.children && (
           <div className={styles.children}>
             {node.children.map(child => renderTreeNode(child, level + 1, fullPath))}
           </div>
@@ -460,7 +508,7 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
             onClick={() => handleFileSelect(result.path)}
           >
             <span className={styles.icon}>
-              {result.is_dir ? getFolderIcon(result.name, false) : getFileIcon(result.name)}
+              {result.is_directory ? getFolderIcon(result.name, false) : getFileIcon(result.name)}
             </span>
             <div className={styles.resultInfo}>
               <div className={styles.resultName}>
@@ -510,49 +558,93 @@ const FileTree: React.FC<FileTreeProps> = ({ fileTree, onFileSelect, workspacePa
       <div className={styles.codeSearchResults}>
         <div className={styles.searchHeader}>
           <span className={styles.searchIcon}>🔍</span>
-          <span>Code Results ({codeSearchResults.total_matches} in {codeSearchResults.files_count} files)</span>
+          <span>Code Results ({codeSearchResults.total_matches} in {codeSearchResults.files_searched} files)</span>
         </div>
         
-        {Object.entries(matchesByFile).map(([filePath, matches]) => (
-          <div key={filePath} className={styles.fileGroup}>
-            <div className={styles.fileHeader}>
-              <span className={styles.icon}>{getFileIcon(matches[0].file_name)}</span>
-              <span className={styles.fileName}>{matches[0].file_name}</span>
-              <span className={styles.filePath}>{filePath}</span>
-              <span className={styles.matchCount}>({matches.length})</span>
-            </div>
-            
-            <div className={styles.matchesList}>
-              {matches.map((match, index) => (
-                <div
-                  key={`${filePath}-${match.line_number}-${index}`}
-                  className={styles.codeMatch}
-                  onClick={() => handleCodeMatchClick(match)}
-                  title={`Click to jump to line ${match.line_number}`}
-                >
-                  <div className={styles.lineNumber}>
-                    {match.line_number}
-                  </div>
-                  <div className={styles.codeContent}>
-                    <div className={styles.mainLine}>
-                      {highlightText(match.line_content.trim(), searchQuery)}
-                    </div>
-                    {match.context_before && (
-                      <div className={styles.contextLine}>
-                        {match.context_before.trim()}
-                      </div>
-                    )}
-                    {match.context_after && (
-                      <div className={styles.contextLine}>
-                        {match.context_after.trim()}
-                      </div>
-                    )}
-                  </div>
+        {Object.entries(matchesByFile).map(([filePath, matches]) => {
+          const fileName = filePath.split('/').pop() || filePath;
+          const relativePath = workspacePath ? filePath.replace(workspacePath, '').replace(/^\//, '') : filePath;
+          const isExpanded = expandedCodeFiles.has(filePath);
+          
+          return (
+            <div key={filePath} className={styles.fileGroup}>
+              {/* File Header - Clickable to expand/collapse */}
+              <div 
+                className={styles.fileHeader}
+                onClick={() => toggleCodeFile(filePath)}
+                title={`${isExpanded ? 'Collapse' : 'Expand'} ${fileName} (${matches.length} matches)`}
+              >
+                <span className={`${styles.chevron} ${isExpanded ? styles.expanded : ''}`}>
+                  ▶
+                </span>
+                <span className={styles.icon}>{getFileIcon(fileName)}</span>
+                <div className={styles.fileInfo}>
+                  <div className={styles.fileName}>{fileName}</div>
+                  <div className={styles.filePath}>{relativePath}</div>
                 </div>
-              ))}
+                <span className={styles.matchCount}>{matches.length}</span>
+              </div>
+
+              {/* Matches List - Only show when expanded */}
+              {isExpanded && (
+                <div className={styles.matchesList}>
+                  {matches.map((match, index) => (
+                    <div
+                      key={`${filePath}-${match.line_number}-${index}`}
+                      className={styles.codeMatch}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent file header toggle
+                        handleCodeMatchClick(match);
+                      }}
+                      title={`Click to jump to line ${match.line_number}`}
+                    >
+                      <div className={styles.lineNumber}>
+                        {match.line_number}
+                      </div>
+                      <div className={styles.codeContent}>
+                        {/* Context before */}
+                        {match.context_before && match.context_before.length > 0 && (
+                          <div className={styles.contextBefore}>
+                            {match.context_before.map((context, idx) => (
+                              <div key={`before-${idx}`} className={styles.contextLine}>
+                                <span className={styles.contextLineNumber}>
+                                  {match.line_number - match.context_before.length + idx}
+                                </span>
+                                <span className={styles.contextText}>{context}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Main match line */}
+                        <div className={styles.mainLine}>
+                          <span className={styles.mainLineNumber}>{match.line_number}</span>
+                          <span className={styles.mainText}>
+                            {highlightText(match.line_content.trim(), searchQuery)}
+                          </span>
+                        </div>
+                        
+                        {/* Context after */}
+                        {match.context_after && match.context_after.length > 0 && (
+                          <div className={styles.contextAfter}>
+                            {match.context_after.map((context, idx) => (
+                              <div key={`after-${idx}`} className={styles.contextLine}>
+                                <span className={styles.contextLineNumber}>
+                                  {match.line_number + idx + 1}
+                                </span>
+                                <span className={styles.contextText}>{context}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
