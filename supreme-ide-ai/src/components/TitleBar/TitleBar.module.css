@@ -8,9 +8,10 @@
   user-select: none;
   flex-shrink: 0;
   border-bottom: 1px solid #333;
+  position: relative;
 }
 .dragRegion { flex-grow: 1; height: 100%; }
-.menu { display: flex; align-items: center; gap: 16px; padding-left: 8px; }
+.menu { display: flex; align-items: center; gap: 16px; padding-left: 8px; position: relative; }
 .menuItem { font-size: 13px; color: #9ca3af; cursor: pointer; transition: color 200ms; }
 .menuItem:hover { color: white; }
 .menuItem.active { color: #67e8f9; }
@@ -18,3 +19,51 @@
 .controlButton { width: 16px; height: 16px; background: none; border: none; color: #9ca3af; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; transition: all 200ms; }
 .controlButton:hover { color: white; }
 .closeButtonHover:hover { color: white; background-color: #e81123; }
+
+.fileMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  min-width: 180px;
+  z-index: 9999;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.fileMenuItem {
+  padding: 8px 12px;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 200ms;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fileMenuItem:hover {
+  background-color: #333;
+  color: #67e8f9;
+}
+
+.fileMenuItem:first-child {
+  border-radius: 4px 4px 0 0;
+}
+
+.fileMenuItem:last-child {
+  border-radius: 0 0 4px 4px;
+}
+
+.shortcut {
+  font-size: 11px;
+  color: #666;
+  font-weight: normal;
+}
+
+.separator {
+  height: 1px;
+  background-color: #333;
+  margin: 4px 0;
+}
