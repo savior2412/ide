@@ -1,0 +1,588 @@
+/* FileTree.module.css - VS Code-like File Tree with Search */
+
+.fileTree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #cccccc;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+/* Search Container */
+.searchContainer {
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  padding: 8px;
+  flex-shrink: 0;
+}
+
+.searchInputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #3c3c3c;
+  border: 1px solid #464647;
+  border-radius: 4px;
+  transition: border-color 0.2s ease;
+}
+
+.searchInputWrapper:focus-within {
+  border-color: #007acc;
+  box-shadow: 0 0 0 1px #007acc;
+}
+
+.searchIcon {
+  padding: 0 8px;
+  color: #cccccc;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.searchInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #cccccc;
+  padding: 6px 8px 6px 0;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.searchInput::placeholder {
+  color: #6a6a6a;
+  font-style: italic;
+}
+
+.clearButton {
+  background: none;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-size: 16px;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.clearButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
+}
+
+.searchStats {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #999999;
+  padding: 2px 4px;
+}
+
+/* Tree Content */
+.treeContent {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.treeContainer {
+  padding: 4px 0;
+}
+
+/* Tree Nodes */
+.treeNode {
+  user-select: none;
+}
+
+.nodeContent {
+  display: flex;
+  align-items: center;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+}
+
+.nodeContent:hover {
+  background: #2a2d2e;
+}
+
+.nodeContent.active {
+  background: #37373d !important;
+  color: #ffffff;
+}
+
+.nodeContent.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #007acc;
+}
+
+/* Chevron for folders */
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+  transition: transform 0.15s ease;
+  color: #cccccc;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.chevron.expanded {
+  transform: rotate(90deg);
+}
+
+/* Icons */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* File/Folder names */
+.name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+/* Children container */
+.children {
+  margin-left: 0;
+}
+
+/* Search Results */
+.searchResults {
+  padding: 8px 0;
+}
+
+.searchHeader {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 4px;
+  color: #cccccc;
+  font-weight: 500;
+  font-size: 12px;
+  border-bottom: 1px solid #3c3c3c;
+  margin-bottom: 4px;
+}
+
+.searchResult {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  position: relative;
+}
+
+.searchResult:hover {
+  background: #2a2d2e;
+}
+
+.searchResult.active {
+  background: #37373d;
+}
+
+.searchResult.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #007acc;
+}
+
+.resultInfo {
+  flex: 1;
+  margin-left: 6px;
+  overflow: hidden;
+}
+
+.resultName {
+  font-size: 13px;
+  color: #cccccc;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultPath {
+  font-size: 11px;
+  color: #999999;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score {
+  font-size: 10px;
+  color: #666666;
+  background: #404040;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
+  min-width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Text highlighting */
+.highlight {
+  background: rgba(255, 255, 0, 0.3);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Search Controls */
+.searchControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  background: #2a2a2a;
+  border-bottom: 1px solid #333;
+  gap: 8px;
+}
+
+.searchTypeButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.searchTypeButton {
+  background: #404040;
+  color: #cccccc;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.searchTypeButton:hover {
+  background: #505050;
+  border-color: #777;
+}
+
+.searchTypeButton.active {
+  background: #007acc;
+  border-color: #007acc;
+  color: white;
+}
+
+.searchOptions {
+  display: flex;
+  gap: 4px;
+}
+
+.optionButton {
+  background: #404040;
+  color: #cccccc;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 24px;
+}
+
+.optionButton:hover {
+  background: #505050;
+  border-color: #777;
+}
+
+.optionButton.active {
+  background: #f39c12;
+  border-color: #f39c12;
+  color: white;
+}
+
+/* Code Search Results */
+.codeSearchResults {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.fileGroup {
+  margin-bottom: 8px;
+}
+
+.fileHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #2a2a2a;
+  border-bottom: 1px solid #333;
+  font-size: 12px;
+}
+
+.fileName {
+  font-weight: bold;
+  color: #e6e6e6;
+}
+
+.filePath {
+  flex: 1;
+  color: #888;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchCount {
+  color: #007acc;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.matchesList {
+  background: #1e1e1e;
+}
+
+.codeMatch {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2a2a2a;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.codeMatch:hover {
+  background: #2a2a2a;
+}
+
+.codeMatch:active {
+  background: #007acc20;
+}
+
+.lineNumber {
+  color: #858585;
+  font-size: 11px;
+  font-weight: bold;
+  min-width: 32px;
+  text-align: right;
+  user-select: none;
+  line-height: 1.4;
+}
+
+.codeContent {
+  flex: 1;
+  overflow: hidden;
+}
+
+.mainLine {
+  color: #e6e6e6;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.contextLine {
+  color: #888;
+  font-size: 11px;
+  line-height: 1.3;
+  margin-top: 2px;
+  opacity: 0.7;
+  white-space: pre-wrap;
+}
+
+/* Empty states */
+.emptyState,
+.noResults {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #999999;
+  text-align: center;
+}
+
+.emptyIcon,
+.noResultsIcon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.emptyState span:last-child,
+.noResults span:last-child {
+  font-size: 13px;
+  color: #666666;
+}
+
+/* Scrollbar styling */
+.treeContent::-webkit-scrollbar {
+  width: 10px;
+}
+
+.treeContent::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.treeContent::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 5px;
+  border: 2px solid #1e1e1e;
+}
+
+.treeContent::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .fileTree {
+    font-size: 12px;
+  }
+  
+  .searchInput {
+    font-size: 12px;
+  }
+  
+  .nodeContent {
+    padding: 3px 6px;
+  }
+  
+  .icon {
+    width: 16px;
+    height: 16px;
+    font-size: 12px;
+  }
+  
+  .name {
+    font-size: 12px;
+  }
+}
+
+/* Focus styles for accessibility */
+.searchInput:focus {
+  outline: none;
+}
+
+.nodeContent:focus-visible,
+.searchResult:focus-visible {
+  outline: 1px solid #007acc;
+  outline-offset: -1px;
+}
+
+/* Animation for smooth transitions */
+.treeNode {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Special styling for search mode */
+.fileTree:has(.searchInput:focus) .searchInputWrapper {
+  border-color: #007acc;
+  box-shadow: 0 0 0 1px #007acc;
+}
+
+/* Loading states */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #999999;
+}
+
+.loadingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #666666;
+  border-top: 2px solid #007acc;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Dark theme refinements */
+.fileTree {
+  --primary-bg: #1e1e1e;
+  --secondary-bg: #252526;
+  --border-color: #3c3c3c;
+  --text-primary: #cccccc;
+  --text-secondary: #999999;
+  --text-muted: #666666;
+  --accent-color: #007acc;
+  --hover-bg: #2a2d2e;
+  --active-bg: #37373d;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .fileTree {
+    --border-color: #ffffff;
+    --text-primary: #ffffff;
+    --text-secondary: #cccccc;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .nodeContent,
+  .searchResult,
+  .clearButton {
+    transition: none;
+  }
+  
+  .treeNode {
+    animation: none;
+  }
+  
+  .loadingSpinner {
+    animation: none;
+  }
+} 

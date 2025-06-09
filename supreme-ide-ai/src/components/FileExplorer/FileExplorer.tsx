@@ -2,6 +2,7 @@
 import styles from './FileExplorer.module.css';
 import { useState, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import FileTree from './FileTree';
 
 // SVG Icons as React Components for reusability
 const FileIcon = ({ extension }: { extension?: string }) => {
@@ -830,15 +831,19 @@ const FileExplorer = ({ fileTree, onFileSelect, onRefresh, workspacePath }: File
         <h2 className={styles.title}>File Explorer</h2>
         <div className={styles.shortcuts}>
           <small style={{ color: '#666', fontSize: '10px' }}>
-            {cmdKey}+/ for shortcuts | Right-click for context menu
+            {cmdKey}+/ for shortcuts | Ctrl+Shift+F for search
           </small>
         </div>
       </div>
-      <nav className={styles.nav}>
-        <div className={styles.navList}>
-          {renderTree(fileTree)}
-        </div>
-      </nav>
+      
+      {/* New FileTree Component with Search */}
+      <FileTree 
+        fileTree={fileTree}
+        onFileSelect={onFileSelect}
+        workspacePath={workspacePath}
+      />
+      
+      {/* Keep original context menu and modals */}
       {renderContextMenu()}
       {renderShortcutsHelp()}
       {renderInputModal()}

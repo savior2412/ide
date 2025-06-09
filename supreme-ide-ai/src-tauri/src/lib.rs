@@ -1,539 +1,223 @@
-use std::process::Command;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs;
 use serde::{Serialize, Deserialize};
 use tauri::command;
-use tauri_plugin_dialog::DialogExt;
-use serde_json;
-use serde_json::json;
-use std::collections::{HashSet, HashMap};
-use regex::Regex;
+// use serde_json::json; // Currently unused
+use std::collections::HashMap;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct FileInfo {
+#[derive(Serialize, Deserialize, Debug)]
+struct FileEntry {
     name: String,
-    is_directory: bool,
-    size: Option<u64>,
-    permissions: Option<String>,
+    path: String,
+    is_dir: bool,
+    children: Option<Vec<FileEntry>>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct FileEntry {
-    pub name: String,
-    pub path: String,
-    pub is_dir: bool,
-    pub children: Option<Vec<FileEntry>>,
+#[derive(Serialize, Deserialize, Debug)]
+struct Problem {
+    #[serde(rename = "type")]
+    problem_type: String,
+    message: String,
+    file: String,
+    line: u32,
+    column: u32,
+    severity: String,
+    source: String,
+    code: Option<String>,
 }
 
-fn read_dir_recursive(path: &str, max_depth: usize, current_depth: usize) -> Vec<FileEntry> {
-    if current_depth >= max_depth {
-        return Vec::new();
-    }
-    
-    let mut entries = Vec::new();
-    if let Ok(read_dir) = fs::read_dir(path) {
-        for entry in read_dir.flatten() {
-            let path_buf = entry.path();
-            let name = entry.file_name().to_string_lossy().to_string();
-            
-            // Skip hidden files và system folders (nhưng vẫn hiển thị tất cả file types)
-            if name.starts_with('.') || name == "node_modules" || name == "target" || name == "__pycache__" {
-                continue;
-            }
-            
-            let is_dir = path_buf.is_dir();
-            let children = if is_dir && current_depth < max_depth - 1 {
-                Some(read_dir_recursive(&path_buf.to_string_lossy(), max_depth, current_depth + 1))
-            } else if is_dir {
-                Some(Vec::new()) // Empty children for directories at max depth
-            } else {
-                None
-            };
-            
-            entries.push(FileEntry {
-                name,
-                path: path_buf.to_string_lossy().to_string(),
-                is_dir,
-                children,
-            });
-        }
-    }
-    
-    // Sort: directories first, then files, alphabetically
-    entries.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
-    });
-    
-    entries
+#[derive(Serialize, Deserialize, Debug)]
+struct FileGroup {
+    #[serde(rename = "fileName")]
+    file_name: String,
+    #[serde(rename = "fileType")]
+    file_type: String,
+    #[serde(rename = "problemCount")]
+    problem_count: u32,
+    problems: Vec<Problem>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ProblemsData {
+    #[serde(rename = "totalProblems")]
+    total_problems: u32,
+    #[serde(rename = "fileGroups")]
+    file_groups: Vec<FileGroup>,
 }
 
 #[command]
-async fn open_folder(app: tauri::AppHandle) -> Result<(String, Vec<FileEntry>), String> {
+fn open_folder() -> Result<(String, Vec<FileEntry>), String> {
     println!("🔄 Backend: Starting open_folder...");
     
-    let folder = app.dialog().file().blocking_pick_folder();
-    if let Some(folder) = folder {
-        let folder_path = PathBuf::from(folder.to_string());
-        let path_str = folder_path.to_string_lossy();
-        
-        println!("📂 Backend: Selected folder: {}", path_str);
-        
-        // Add validation
-        if !folder_path.exists() {
-            return Err("Selected folder does not exist".to_string());
-        }
-        
-        if !folder_path.is_dir() {
-            return Err("Selected path is not a directory".to_string());
-        }
-        
-        let entries = read_dir_recursive(path_str.as_ref(), 3, 0); // Load up to 3 levels deep
-        println!("✅ Backend: Successfully read {} entries from {}", entries.len(), path_str);
-        
-        // Log some entries for debugging
-        for (i, entry) in entries.iter().take(3).enumerate() {
-            println!("   {}. {} ({})", i + 1, entry.name, if entry.is_dir { "dir" } else { "file" });
-        }
-        if entries.len() > 3 {
-            println!("   ... and {} more", entries.len() - 3);
-        }
-        
-        // Return both workspace path and entries
-        Ok((path_str.to_string(), entries))
-    } else {
-        println!("❌ Backend: No folder selected by user");
-        Err("No folder selected".to_string())
-    }
-}
-
-#[command]
-async fn open_file_dialog(app: tauri::AppHandle) -> Result<(String, String), String> {
-    let file = app.dialog().file().blocking_pick_file();
-    if let Some(file) = file {
-        let file_path = PathBuf::from(file.to_string());
-        let path = file_path.to_string_lossy().to_string();
-        match fs::read_to_string(&path) {
-            Ok(content) => Ok((path, content)),
-            Err(e) => Err(e.to_string()),
-        }
-    } else {
-        Err("No file selected".to_string())
-    }
-}
-
-#[command]
-async fn open_file(path: String) -> Result<String, String> {
-    match fs::read_to_string(&path) {
-        Ok(content) => Ok(content),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-#[command]
-async fn save_file(path: String, content: String) -> Result<(), String> {
-    fs::write(&path, content).map_err(|e| e.to_string())
-}
-
-#[command]
-async fn save_as_file(app: tauri::AppHandle, content: String) -> Result<String, String> {
-    let file = app.dialog().file().set_title("Save As").blocking_save_file();
-    if let Some(file) = file {
-        let file_path = PathBuf::from(file.to_string());
-        let path = file_path.to_string_lossy().to_string();
-        match fs::write(&path, content) {
-            Ok(_) => Ok(path),
-            Err(e) => Err(e.to_string()),
-        }
-    } else {
-        Err("No file selected".to_string())
-    }
-}
-
-#[tauri::command]
-fn execute_command_in_workspace(command: String, workspace_path: String) -> Result<String, String> {
-    // Validate workspace path exists
-    if !Path::new(&workspace_path).exists() {
-        return Err(format!("Workspace path does not exist: {}", workspace_path));
-    }
-
-    // Parse command and arguments
-    let parts: Vec<&str> = command.trim().split_whitespace().collect();
-    if parts.is_empty() {
-        return Err("Empty command".to_string());
-    }
-
-    let cmd = parts[0];
-    let args = &parts[1..];
-
-    // Handle built-in commands
-    match cmd {
-        "help" => {
-            return Ok(format!(
-                "Available commands:
-• ls, dir - List directory contents
-• cd <path> - Change directory
-• pwd - Show current directory
-• cat, type <file> - Show file contents
-• mkdir <name> - Create directory
-• rm, del <file> - Remove file
-• cp, copy <src> <dest> - Copy file
-• mv, move <src> <dest> - Move file
-• touch <file> - Create empty file
-• echo <text> - Print text
-• clear - Clear terminal
-• exit - Exit terminal
-• python <file> - Run Python script
-• node <file> - Run Node.js script
-• git <command> - Git commands
-• npm/pnpm/yarn - Package managers
-• cargo - Rust commands
-
-Current workspace: {}",
-                workspace_path
-            ));
-        },
-        "clear" => {
-            return Ok("\x1b[2J\x1b[H".to_string()); // Clear screen ANSI codes
-        },
-        "pwd" => {
-            return Ok(workspace_path.clone());
-        },
-        "ls" | "dir" => {
-            return list_directory(&workspace_path, args);
-        },
-        _ => {} // Continue to external command execution
-    }
-
-    // Execute external command
-    let output = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(&["/C", &command])
-            .current_dir(&workspace_path)
-            .output()
-    } else {
-        Command::new("sh")
-            .arg("-c")
-            .arg(&command)
-            .current_dir(&workspace_path)
-            .output()
-    };
+    let output = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg("POSIX path of (choose folder with prompt \"Select workspace folder\")")
+        .output();
 
     match output {
         Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            
-            if !stderr.is_empty() {
-                if output.status.success() {
-                    // Some commands output to stderr but are successful (like git status with no changes)
-                    Ok(format!("{}{}", stdout, stderr))
-                } else {
-                    Err(format!("Error: {}", stderr))
-                }
-            } else {
-                Ok(stdout.to_string())
-            }
-        },
-        Err(e) => Err(format!("Failed to execute command: {}", e))
-    }
-}
-
-fn list_directory(path: &str, args: &[&str]) -> Result<String, String> {
-    let detailed = args.contains(&"-l") || args.contains(&"-la") || args.contains(&"-al");
-    let show_hidden = args.contains(&"-a") || args.contains(&"-la") || args.contains(&"-al");
-
-    match fs::read_dir(path) {
-        Ok(entries) => {
-            let mut result = String::new();
-            let mut files = Vec::new();
-            let mut dirs = Vec::new();
-
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    let name = entry.file_name().to_string_lossy().to_string();
-                    
-                    // Skip hidden files unless -a flag is used
-                    if !show_hidden && name.starts_with('.') {
-                        continue;
+            if output.status.success() {
+                let folder_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                println!("📂 Backend: Selected folder: {}", folder_path);
+                
+                // Get folder structure as tree
+                match build_file_tree(&folder_path) {
+                    Ok(file_tree) => {
+                        println!("✅ Backend: Successfully built file tree from {}", folder_path);
+                        Ok((folder_path, file_tree))
                     }
-
-                    if path.is_dir() {
-                        dirs.push(name);
-                    } else {
-                        files.push(name);
+                    Err(e) => {
+                        let error = format!("Failed to read directory: {}", e);
+                        println!("❌ Backend: {}", error);
+                        Err(error)
                     }
                 }
-            }
-
-            // Sort alphabetically
-            dirs.sort();
-            files.sort();
-
-            if detailed {
-                // Detailed listing similar to ls -l
-                for dir in &dirs {
-                    result.push_str(&format!("drwxr-xr-x 📁 {}\n", dir));
-                }
-                for file in &files {
-                    let icon = get_file_icon(file);
-                    result.push_str(&format!("-rw-r--r-- {} {}\n", icon, file));
-                }
             } else {
-                // Simple listing
-                for dir in &dirs {
-                    result.push_str(&format!("📁 {}\n", dir));
-                }
-                for file in &files {
-                    let icon = get_file_icon(file);
-                    result.push_str(&format!("{} {}\n", icon, file));
-                }
+                let error = "User cancelled folder selection";
+                println!("⚠️ Backend: {}", error);
+                Err(error.to_string())
             }
-
-            if result.is_empty() {
-                Ok("Directory is empty".to_string())
-            } else {
-                Ok(result.trim_end().to_string())
-            }
-        },
-        Err(e) => Err(format!("Failed to read directory: {}", e))
+        }
+        Err(e) => {
+            let error = format!("Failed to show folder dialog: {}", e);
+            println!("❌ Backend: {}", error);
+            Err(error)
+        }
     }
 }
 
-fn get_file_icon(filename: &str) -> &'static str {
-    let extension = Path::new(filename)
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("");
-
-    match extension.to_lowercase().as_str() {
-        "py" => "🐍",
-        "js" | "jsx" => "📜",
-        "ts" | "tsx" => "📘",
-        "rs" => "🦀",
-        "html" | "htm" => "🌐",
-        "css" => "🎨",
-        "json" => "📋",
-        "md" | "markdown" => "📝",
-        "txt" => "📄",
-        "pdf" => "📕",
-        "png" | "jpg" | "jpeg" | "gif" | "svg" => "🖼️",
-        "mp4" | "avi" | "mkv" | "mov" => "🎬",
-        "mp3" | "wav" | "flac" => "🎵",
-        "zip" | "rar" | "7z" | "tar" | "gz" => "📦",
-        "exe" | "app" => "⚙️",
-        "sh" | "bash" | "zsh" => "🔧",
-        "sql" => "🗄️",
-        "xml" => "📰",
-        "yaml" | "yml" => "⚙️",
-        "toml" => "⚙️",
-        "dockerfile" => "🐳",
-        _ => "📄"
-    }
-}
-
-#[tauri::command]
-fn get_file_list(dir_path: String) -> Result<Vec<String>, String> {
-    let path = Path::new(&dir_path);
-    
-    if !path.exists() {
-        return Err("Directory does not exist".to_string());
-    }
-    
-    if !path.is_dir() {
-        return Err("Path is not a directory".to_string());
-    }
-    
-    let mut files = Vec::new();
-    
-    match fs::read_dir(path) {
-        Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(name) = path.file_name() {
-                            files.push(name.to_string_lossy().to_string());
-                        }
-                    }
-                }
-            }
-            files.sort();
-            Ok(files)
-        },
-        Err(e) => Err(format!("Failed to read directory: {}", e))
-    }
-}
-
-#[tauri::command]
+#[command]
 fn read_file_content(file_path: String) -> Result<String, String> {
+    println!("📖 Backend: Reading file: {}", file_path);
+    
+    // Try to read the file as-is first (for absolute paths)
     match fs::read_to_string(&file_path) {
-        Ok(content) => Ok(content),
-        Err(err) => Err(format!("Failed to read file {}: {}", file_path, err))
-    }
-}
-
-#[tauri::command]
-fn write_file_content(file_path: String, content: String) -> Result<(), String> {
-    match fs::write(&file_path, content) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(format!("Failed to write file: {}", e))
-    }
-  }
-  
-  #[tauri::command]
-  fn create_new_file(file_path: String) -> Result<(), String> {
-    println!("🔧 Backend: Creating file: {}", file_path);
-    
-    if Path::new(&file_path).exists() {
-        return Err("File already exists".to_string());
-    }
-    
-    // Create parent directories if they don't exist
-    if let Some(parent) = Path::new(&file_path).parent() {
-        if !parent.exists() {
-            match fs::create_dir_all(parent) {
-                Ok(_) => println!("📁 Created parent directories for: {}", file_path),
-                Err(e) => return Err(format!("Failed to create parent directories: {}", e))
+        Ok(content) => {
+            println!("✅ Backend: Successfully read {} characters from {}", content.len(), file_path);
+            return Ok(content);
+        }
+        Err(_) => {
+            // If failed, try to resolve relative paths
+            let path = Path::new(&file_path);
+            if path.is_relative() {
+                // Try different workspace roots
+                let possible_roots = vec![
+                    "/Users/savior/Desktop/ide",
+                    "/Users/savior/Desktop/ide/supreme-ide-ai",
+                ];
+                
+                for root in possible_roots {
+                    let full_path = Path::new(root).join(&file_path);
+                    println!("🔍 Backend: Trying path: {}", full_path.display());
+                    
+                    if let Ok(content) = fs::read_to_string(&full_path) {
+                        println!("✅ Backend: Successfully read {} characters from {}", content.len(), full_path.display());
+                        return Ok(content);
+                    }
+                }
             }
-        }
-    }
-    
-    match fs::write(&file_path, "") {
-        Ok(_) => {
-            println!("✅ Created file: {}", file_path);
-            Ok(())
-        },
-        Err(e) => Err(format!("Failed to create file: {}", e))
-    }
-}
-
-#[tauri::command]
-fn create_new_folder(folder_path: String) -> Result<(), String> {
-    println!("🔧 Backend: Creating folder: {}", folder_path);
-    
-    if Path::new(&folder_path).exists() {
-        return Err("Folder already exists".to_string());
-    }
-    
-    match fs::create_dir_all(&folder_path) {
-        Ok(_) => {
-            println!("✅ Created folder: {}", folder_path);
-            Ok(())
-        },
-        Err(e) => Err(format!("Failed to create folder: {}", e))
-    }
-}
-
-#[tauri::command]
-fn rename_file_or_folder(old_path: String, new_path: String) -> Result<(), String> {
-    println!("🔧 Backend: Renaming: {} -> {}", old_path, new_path);
-    
-    if !Path::new(&old_path).exists() {
-        return Err("Source path does not exist".to_string());
-    }
-    
-    if Path::new(&new_path).exists() {
-        return Err("Destination path already exists".to_string());
-    }
-    
-    match fs::rename(&old_path, &new_path) {
-        Ok(_) => {
-            println!("✅ Renamed: {} -> {}", old_path, new_path);
-            Ok(())
-        },
-        Err(e) => Err(format!("Failed to rename: {}", e))
-    }
-}
-
-#[tauri::command]
-fn delete_file_or_folder(path: String) -> Result<(), String> {
-    println!("🔧 Backend: Deleting: {}", path);
-    
-    let path_buf = Path::new(&path);
-    
-    if !path_buf.exists() {
-        return Err("Path does not exist".to_string());
-    }
-    
-    if path_buf.is_dir() {
-        match fs::remove_dir_all(&path) {
-            Ok(_) => {
-                println!("✅ Deleted folder: {}", path);
-                Ok(())
-            },
-            Err(e) => Err(format!("Failed to delete folder: {}", e))
-        }
-    } else {
-        match fs::remove_file(&path) {
-            Ok(_) => {
-                println!("✅ Deleted file: {}", path);
-                Ok(())
-            },
-            Err(e) => Err(format!("Failed to delete file: {}", e))
+            
+            let error = format!("Failed to read file {}: File not found", file_path);
+            println!("❌ Backend: {}", error);
+            Err(error)
         }
     }
 }
 
-#[tauri::command]
-fn run_file_in_terminal(file_path: String, workspace_path: String) -> Result<String, String> {
-    let path = Path::new(&file_path);
-    let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+#[command]
+fn write_file_content(file_path: String, content: String) -> Result<(), String> {
+    println!("📝 Backend: Writing to file: {}", file_path);
     
-    let command = match extension.to_lowercase().as_str() {
-        "py" => format!("python \"{}\"", file_path),
-        "js" | "mjs" => format!("node \"{}\"", file_path),
-        "rs" => {
-            // For Rust, we need to compile and run
-            let dir = path.parent().unwrap_or(Path::new("."));
-            format!("cd \"{}\" && rustc \"{}\" && ./main", dir.display(), path.file_name().unwrap().to_str().unwrap())
-        },
-        "sh" | "bash" => format!("bash \"{}\"", file_path),
-        _ => return Err(format!("Unsupported file type: {}", extension))
-    };
-    
-    execute_command_in_workspace(command, workspace_path)
+    match fs::write(&file_path, content) {
+        Ok(_) => {
+            println!("✅ Backend: Successfully wrote to {}", file_path);
+            Ok(())
+        }
+        Err(e) => {
+            let error = format!("Failed to write to file {}: {}", file_path, e);
+            println!("❌ Backend: {}", error);
+            Err(error)
+        }
+    }
 }
 
-#[tauri::command]
-fn analyze_workspace_problems(workspace_path: String) -> Result<serde_json::Value, String> {
-    let mut problems = Vec::new();
-    let workspace_dir = Path::new(&workspace_path);
+#[command]
+fn refresh_file_tree(workspace_path: String) -> Result<Vec<FileEntry>, String> {
+    println!("🔄 Backend: Refreshing file tree for: {}", workspace_path);
+    build_file_tree(&workspace_path)
+}
+
+#[command]
+fn open_file(path: String) -> Result<String, String> {
+    println!("📖 Backend: Opening file: {}", path);
+    read_file_content(path)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct SearchMatch {
+    file_path: String,
+    file_name: String,
+    line_number: u32,
+    line_content: String,
+    match_start: u32,
+    match_end: u32,
+    context_before: Option<String>,
+    context_after: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct SearchResult {
+    query: String,
+    total_matches: u32,
+    files_count: u32,
+    matches: Vec<SearchMatch>,
+}
+
+#[command]
+fn search_in_files(workspace_path: String, query: String, case_sensitive: bool, use_regex: bool) -> Result<SearchResult, String> {
+    println!("🔍 Backend: Searching for '{}' in workspace: {}", query, workspace_path);
     
-    if !workspace_dir.exists() {
-        return Err("Workspace path does not exist".to_string());
+    if query.trim().is_empty() {
+        return Ok(SearchResult {
+            query: query.clone(),
+            total_matches: 0,
+            files_count: 0,
+            matches: Vec::new(),
+        });
     }
     
-    fn analyze_directory(dir: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut all_matches = Vec::new();
+    let mut files_searched = 0;
+    
+    fn search_in_directory(
+        dir: &Path, 
+        query: &str, 
+        case_sensitive: bool, 
+        use_regex: bool,
+        workspace_root: &Path,
+        matches: &mut Vec<SearchMatch>,
+        files_count: &mut u32
+    ) -> Result<(), Box<dyn std::error::Error>> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             
             if path.is_dir() {
-                // Skip directories that don't need analysis
-                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if ["node_modules", ".git", "target", "__pycache__", ".vscode", "src-tauri", ".next", "dist", "build", ".cargo"].contains(&dir_name) {
-                        continue;
-                    }
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                // Skip common directories that shouldn't be searched
+                if name.starts_with('.') || name == "node_modules" || name == "target" 
+                   || name == "dist" || name == "build" || name == "__pycache__" {
+                    continue;
                 }
-                analyze_directory(&path, problems)?;
-            } else if path.is_file() {
-                // Only analyze test-problems to match Cursor IDE behavior
-                let path_str = path.to_string_lossy();
-                let should_analyze = path_str.contains("test-problems");
-                
-                if should_analyze {
-                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                        match extension.to_lowercase().as_str() {
-                            "ts" | "tsx" => analyze_typescript_file(&path, problems)?,
-                            "js" | "jsx" => analyze_javascript_file(&path, problems)?,
-                            "py" => analyze_python_file(&path, problems)?,
-                            "rs" => analyze_rust_file(&path, problems)?,
-                            _ => {} // Skip CSS/JSON analysis for now to reduce noise
+                search_in_directory(&path, query, case_sensitive, use_regex, workspace_root, matches, files_count)?;
+            } else {
+                // Only search in text files
+                if let Some(extension) = path.extension() {
+                    let ext = extension.to_string_lossy().to_lowercase();
+                    if matches!(ext.as_str(), "txt" | "md" | "js" | "jsx" | "ts" | "tsx" | "py" | "rs" | "css" | "html" | "json" | "xml" | "yaml" | "yml" | "toml" | "sql" | "sh" | "bat") {
+                        *files_count += 1;
+                        if let Err(e) = search_in_file(&path, query, case_sensitive, use_regex, workspace_root, matches) {
+                            println!("⚠️ Backend: Could not search in file {}: {}", path.display(), e);
                         }
                     }
                 }
@@ -542,503 +226,458 @@ fn analyze_workspace_problems(workspace_path: String) -> Result<serde_json::Valu
         Ok(())
     }
     
-    analyze_directory(workspace_dir, &mut problems)
-        .map_err(|e| format!("Error analyzing workspace: {}", e))?;
+    let workspace_dir = Path::new(&workspace_path);
+    search_in_directory(workspace_dir, &query, case_sensitive, use_regex, workspace_dir, &mut all_matches, &mut files_searched)
+        .map_err(|e| format!("Search error: {}", e))?;
     
-    // Group problems by file
-    let mut grouped_problems: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    let total_matches = all_matches.len() as u32;
+    let unique_files = all_matches.iter().map(|m| &m.file_path).collect::<std::collections::HashSet<_>>().len() as u32;
     
-    for problem in problems {
-        let file_path = problem.get("file")
-            .and_then(|f| f.as_str())
-            .unwrap_or("unknown");
-            
-        grouped_problems.entry(file_path.to_string())
-            .or_insert_with(Vec::new)
-            .push(problem);
-    }
+    println!("✅ Backend: Found {} matches in {} files (searched {} files)", total_matches, unique_files, files_searched);
     
-    // Convert to final format
-    let mut file_groups = Vec::new();
-    
-    for (file_path, file_problems) in grouped_problems {
-        // Extract file info
-        let path = Path::new(&file_path);
-        let file_name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
-        let extension = path.extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("");
-        
-        // Determine file type and icon
-        let (file_type, icon) = match extension.to_lowercase().as_str() {
-            "ts" | "tsx" => ("TypeScript", "TS"),
-            "js" | "jsx" => ("JavaScript", "JS"), 
-            "py" => ("Python", "PY"),
-            "rs" => ("Rust", "RS"),
-            _ => ("Unknown", "📄")
-        };
-        
-        let relative_path = file_path.replace(&workspace_path, "")
-            .trim_start_matches('/')
-            .to_string();
-        
-        let group = serde_json::json!({
-            "fileName": file_name,
-            "filePath": relative_path,
-            "fileType": file_type,
-            "icon": icon,
-            "problemCount": file_problems.len(),
-            "problems": file_problems
-        });
-        
-        file_groups.push(group);
-    }
-    
-    // Sort by file name
-    file_groups.sort_by(|a, b| {
-        a.get("fileName").and_then(|f| f.as_str())
-            .cmp(&b.get("fileName").and_then(|f| f.as_str()))
-    });
-    
-    Ok(serde_json::json!({
-        "fileGroups": file_groups,
-        "totalProblems": file_groups.iter()
-            .map(|g| g.get("problemCount").and_then(|c| c.as_u64()).unwrap_or(0))
-            .sum::<u64>()
-    }))
+    Ok(SearchResult {
+        query: query.to_string(),
+        total_matches,
+        files_count: unique_files,
+        matches: all_matches,
+    })
 }
 
-fn analyze_typescript_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
+fn search_in_file(
+    file_path: &Path, 
+    query: &str, 
+    case_sensitive: bool, 
+    _use_regex: bool,
+    workspace_root: &Path,
+    matches: &mut Vec<SearchMatch>
+) -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(file_path)?;
-    let _file_path_str = file_path.to_string_lossy().to_string();
+    let lines: Vec<&str> = content.lines().collect();
     
-    // Collect imports and declarations
-    let mut imports = HashSet::new();
-    let mut declared_vars = HashSet::new();
-    let mut interfaces = HashSet::new();
+    let search_query = if case_sensitive { query.to_string() } else { query.to_lowercase() };
     
-    // First pass: collect imports, variables, and interfaces
-    for line in content.lines() {
-        let trimmed = line.trim();
+    for (line_idx, line) in lines.iter().enumerate() {
+        let search_line = if case_sensitive { line.to_string() } else { line.to_lowercase() };
         
-        // Collect imports
-        if trimmed.starts_with("import ") {
-            if let Some(import) = extract_ts_import(trimmed) {
-                imports.insert(import);
-            }
-        }
-        
-        // Collect variable declarations
-        if let Some(var) = extract_ts_variable_declaration(trimmed) {
-            declared_vars.insert(var);
-        }
-        
-        // Collect interface declarations
-        if trimmed.starts_with("interface ") || trimmed.starts_with("export interface ") {
-            if let Some(interface) = extract_ts_interface(trimmed) {
-                interfaces.insert(interface);
-            }
+        if let Some(match_pos) = search_line.find(&search_query) {
+            let relative_path = if let Ok(rel_path) = file_path.strip_prefix(workspace_root) {
+                rel_path.to_string_lossy().to_string()
+            } else {
+                file_path.to_string_lossy().to_string()
+            };
+            
+            let file_name = file_path.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            
+            let context_before = if line_idx > 0 {
+                Some(lines[line_idx - 1].to_string())
+            } else {
+                None
+            };
+            
+            let context_after = if line_idx + 1 < lines.len() {
+                Some(lines[line_idx + 1].to_string())
+            } else {
+                None
+            };
+            
+            matches.push(SearchMatch {
+                file_path: relative_path,
+                file_name,
+                line_number: (line_idx + 1) as u32,
+                line_content: line.to_string(),
+                match_start: match_pos as u32,
+                match_end: (match_pos + query.len()) as u32,
+                context_before,
+                context_after,
+            });
         }
     }
     
-    // Second pass: find problems
-    for (line_num, line) in content.lines().enumerate() {
-        let line_number = line_num + 1;
-        let line_content = line.trim();
+    Ok(())
+}
+
+fn build_file_tree(folder_path: &str) -> Result<Vec<FileEntry>, String> {
+    println!("📁 Backend: Building file tree for: {}", folder_path);
+    
+    fn scan_directory(dir: &Path, workspace_root: &Path) -> Result<Vec<FileEntry>, Box<dyn std::error::Error>> {
+        let mut entries = Vec::new();
         
-        // Skip comments and imports
-        if line_content.starts_with("//") || line_content.starts_with("/*") || 
-           line_content.starts_with("import ") || line_content.starts_with("export ") {
-            continue;
-        }
-        
-        // Look for undefined variables using regex
-        let word_regex = Regex::new(r"\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b").unwrap();
-        for word_match in word_regex.find_iter(line) {
-            let word = word_match.as_str();
-            let col = word_match.start() + 1;
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
             
-            // Skip built-ins, keywords, and declared variables
-            if is_ts_builtin(word) || is_ts_keyword(word) || declared_vars.contains(word) || 
-               imports.contains(word) || interfaces.contains(word) {
+            // Skip hidden files/folders
+            if name.starts_with('.') {
                 continue;
             }
             
-            // Check if it's clearly an undefined variable
-            if (line_content.contains(&format!("console.log({})", word)) ||
-                line_content.contains(&format!("{} =", word)) ||
-                line_content.contains(&format!("let {} =", word)) ||
-                line_content.contains(&format!("const {} =", word)) ||
-                line_content.contains(&format!("return {}", word))) &&
-               !line_content.contains("function") &&
-               !line_content.contains("class") {
-                
-                // Determine error code and message based on context
-                let (error_code, message) = if word.contains("undefined") || word == "undefined_var" {
-                    ("ts(2552)", format!("Cannot find name '{}'. Did you mean 'undefined'?", word))
-                } else {
-                    ("ts(2304)", format!("Cannot find name '{}'.", word))
-                };
-                
-                problems.push(json!({
-                    "type": "error",
-                    "severity": "error",
-                    "file": file_path.to_string_lossy().to_string(),
-                    "line": line_number,
-                    "column": col,
-                    "message": message,
-                    "code": error_code,
-                    "source": "ts",
-                    "category": "TypeScript Compiler",
-                    "quickFix": Some(format!("Declare variable '{}' or check spelling", word)),
-                    "relatedInformation": Some(format!("Variable '{}' is not defined in current scope", word))
-                }));
-            }
+            let is_dir = path.is_dir();
+            let children = if is_dir {
+                // Recursively scan subdirectories
+                match scan_directory(&path, workspace_root) {
+                    Ok(children_vec) => {
+                        if children_vec.is_empty() {
+                            None
+                        } else {
+                            Some(children_vec)
+                        }
+                    }
+                    Err(_) => None // Skip directories we can't read
+                }
+            } else {
+                None
+            };
+            
+            // Store path relative to workspace root
+            let relative_path = if let Ok(rel_path) = path.strip_prefix(workspace_root) {
+                rel_path.to_string_lossy().to_string()
+            } else {
+                path.to_string_lossy().to_string()
+            };
+            
+            entries.push(FileEntry {
+                name,
+                path: relative_path,
+                is_dir,
+                children,
+            });
         }
+        
+        // Sort: directories first, then files
+        entries.sort_by(|a, b| {
+            match (a.is_dir, b.is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            }
+        });
+        
+        Ok(entries)
     }
     
-    Ok(())
+    let workspace_path = Path::new(folder_path);
+    match scan_directory(workspace_path, workspace_path) {
+        Ok(tree) => {
+            println!("✅ Backend: Built file tree with {} entries", tree.len());
+            Ok(tree)
+        }
+        Err(e) => {
+            let error = format!("Failed to scan directory {}: {}", folder_path, e);
+            println!("❌ Backend: {}", error);
+            Err(error)
+        }
+    }
 }
 
-fn analyze_javascript_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
-    // Similar to TypeScript but with JS-specific checks
-    analyze_typescript_file(file_path, problems)
+#[command]
+fn analyze_workspace_problems(workspace_path: String) -> Result<ProblemsData, String> {
+    println!("🔍 Backend: Analyzing workspace problems for: {}", workspace_path);
+    
+    let mut all_problems = Vec::new();
+    let workspace_dir = Path::new(&workspace_path);
+    
+    if !workspace_dir.exists() {
+        return Err("Workspace path does not exist".to_string());
+    }
+    
+    fn analyze_directory(dir: &Path, problems: &mut Vec<Problem>) -> Result<(), Box<dyn std::error::Error>> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            if path.is_dir() {
+                if let Some(name) = path.file_name() {
+                    let name_str = name.to_string_lossy();
+                    // Skip more directories to reduce noise
+                    if name_str.starts_with('.') || name_str == "node_modules" 
+                       || name_str == "target" || name_str == "dist" 
+                       || name_str == "build" || name_str == "coverage"
+                       || name_str == "__pycache__" || name_str == "venv"
+                       || name_str == ".git" || name_str == ".next" {
+                        continue;
+                    }
+                }
+                analyze_directory(&path, problems)?;
+            } else if let Some(extension) = path.extension() {
+                // Only analyze actual source files, not generated ones
+                let path_str = path.to_string_lossy();
+                if path_str.contains("/.git/") || path_str.contains("/node_modules/") 
+                   || path_str.contains("/target/") || path_str.contains("/dist/")
+                   || path_str.contains(".min.") || path_str.contains(".bundle.") {
+                    continue;
+                }
+                
+                match extension.to_string_lossy().as_ref() {
+                    "ts" | "tsx" => analyze_typescript_file(&path, problems)?,
+                    "js" | "jsx" => analyze_javascript_file(&path, problems)?,
+                    "py" => analyze_python_file(&path, problems)?,
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+    
+    if let Err(e) = analyze_directory(workspace_dir, &mut all_problems) {
+        println!("❌ Backend: Error analyzing directory: {}", e);
+        return Err(format!("Failed to analyze workspace: {}", e));
+    }
+    
+    let mut grouped_problems: HashMap<String, Vec<Problem>> = HashMap::new();
+    for problem in all_problems {
+        grouped_problems.entry(problem.file.clone()).or_insert_with(Vec::new).push(problem);
+    }
+    
+    let mut file_groups = Vec::new();
+    for (file_path, problems) in grouped_problems {
+        let file_name = Path::new(&file_path)
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        
+        let file_type = Path::new(&file_path)
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        
+        file_groups.push(FileGroup {
+            file_name,
+            file_type,
+            problem_count: problems.len() as u32,
+            problems,
+        });
+    }
+    
+    let total_problems = file_groups.iter().map(|fg| fg.problem_count).sum();
+    
+    println!("✅ Backend: Found {} problems in {} files", total_problems, file_groups.len());
+    
+    Ok(ProblemsData {
+        total_problems,
+        file_groups,
+    })
 }
 
-fn analyze_python_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
+fn analyze_typescript_file(file_path: &Path, problems: &mut Vec<Problem>) -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(file_path)?;
     let file_path_str = file_path.to_string_lossy().to_string();
     
-    // Extract all variable declarations
-    let mut declared_vars = HashSet::new();
-    let mut imported_modules = HashSet::new();
+    // Skip test files and config files  
+    if file_path_str.contains(".test.") || file_path_str.contains(".spec.")
+       || file_path_str.contains("config") || file_path_str.contains(".d.ts") {
+        return Ok(());
+    }
     
-    for line in content.lines() {
+    let mut has_real_issues = false;
+    let mut temp_problems = Vec::new();
+    
+    for (line_number, line) in content.lines().enumerate() {
+        let line_number = (line_number + 1) as u32;
         let trimmed = line.trim();
         
-        // Collect variable declarations
-        if let Some(var) = extract_python_variable_declaration(trimmed) {
-            declared_vars.insert(var);
+        // Skip comments and empty lines
+        if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("/*") {
+            continue;
         }
         
-        // Collect imports
-        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            if let Some(import) = extract_python_import(trimmed) {
-                imported_modules.insert(import);
-            }
+        // Only flag actual syntax/logic errors, not style issues
+        if trimmed.contains("Cannot find name") || trimmed.contains("Property") && trimmed.contains("does not exist") {
+            temp_problems.push(Problem {
+                problem_type: "error".to_string(),
+                message: "TypeScript compilation error".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: 1,
+                severity: "error".to_string(),
+                source: "TypeScript".to_string(),
+                code: Some("2304".to_string()),
+            });
+            has_real_issues = true;
+        }
+        
+        // Only flag unused variables if they're not prefixed with _
+        if (trimmed.contains("is declared but its value is never read") 
+           || trimmed.contains("is defined but never used"))
+           && !trimmed.contains("_") {
+            temp_problems.push(Problem {
+                problem_type: "warning".to_string(),
+                message: "Variable declared but never used".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: 1,
+                severity: "warning".to_string(),
+                source: "TypeScript".to_string(),
+                code: Some("6133".to_string()),
+            });
+        }
+        
+        // Only flag console.log in non-development files
+        if trimmed.contains("console.log") && !file_path_str.contains("dev") 
+           && !file_path_str.contains("debug") && !file_path_str.contains("test") {
+            temp_problems.push(Problem {
+                problem_type: "info".to_string(),
+                message: "Remove console.log before production".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: trimmed.find("console.log").unwrap_or(0) as u32 + 1,
+                severity: "info".to_string(),
+                source: "TypeScript".to_string(),
+                code: Some("no-console".to_string()),
+            });
         }
     }
     
-    for (line_num, line) in content.lines().enumerate() {
-        let line_number = line_num + 1;
-        let trimmed = line.trim();
-        
-        // Check for undefined variables in print statements
-        if trimmed.starts_with("print(") {
-            // Extract variable names from print statement
-            if let Some(var_name) = extract_variable_from_print(trimmed) {
-                if !declared_vars.contains(&var_name) && !is_builtin_python(&var_name) {
-                    problems.push(serde_json::json!({
-                        "type": "error",
-                        "severity": "error",
-                        "file": file_path_str,
-                        "line": line_number,
-                        "column": trimmed.find(&var_name).unwrap_or(0) + 1,
-                        "message": format!("Name '{}' is not defined", var_name),
-                        "code": "F821", // Flake8 undefined name
-                        "source": "Pylance",
-                        "category": "Python Language Server",
-                        "quickFix": Some(format!("Define variable '{}' before use", var_name)),
-                        "relatedInformation": Some("reportUndefinedVariable".to_string())
-                    }));
-                }
-            }
-        }
-        
-        // Check for unused imports
-        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            let import_name = extract_python_import(trimmed);
-            if let Some(import) = import_name {
-                if !is_python_import_used(&import, &content) {
-                    problems.push(serde_json::json!({
-                        "type": "warning",
-                        "severity": "warning",
-                        "file": file_path_str,
-                        "line": line_number,
-                        "column": 1,
-                        "message": format!("'{}' is imported but unused", import),
-                        "code": "F401", // Flake8 unused import
-                        "source": "Pylance",
-                        "category": "Python Language Server",
-                        "quickFix": Some(format!("Remove unused import '{}'", import)),
-                        "relatedInformation": Some("reportUnusedImport".to_string())
-                    }));
-                }
-            }
-        }
-        
-        // Check for missing f-string (only for specific patterns)
-        if (trimmed.contains("\"{}.format(") || trimmed.contains("'{}.format(")) && !trimmed.starts_with("#") {
-            problems.push(serde_json::json!({
-                "id": format!("{}:{}:fstring", file_path_str, line_number),
-                "type": "info",
-                "message": "Consider using f-string for better readability",
-                "file": file_path_str,
-                "line": line_number,
-                "column": 1,
-                "source": "Python Analyzer"
-            }));
-        }
+    // Only add problems if there are real issues or less than 3 minor issues
+    if has_real_issues || temp_problems.len() <= 3 {
+        problems.extend(temp_problems);
     }
     
     Ok(())
 }
 
-fn analyze_rust_file(file_path: &Path, problems: &mut Vec<serde_json::Value>) -> Result<(), Box<dyn std::error::Error>> {
+fn analyze_javascript_file(file_path: &Path, problems: &mut Vec<Problem>) -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(file_path)?;
     let file_path_str = file_path.to_string_lossy().to_string();
     
-    for (line_num, line) in content.lines().enumerate() {
-        let line_number = line_num + 1;
+    // Skip generated/minified files
+    if file_path_str.contains(".min.") || file_path_str.contains(".bundle.") 
+       || file_path_str.contains("vendor") || content.lines().count() == 1 {
+        return Ok(());
+    }
+    
+    let mut issue_count = 0;
+    
+    for (line_number, line) in content.lines().enumerate() {
+        let line_number = (line_number + 1) as u32;
         let trimmed = line.trim();
         
-        // Check for unwrap() usage
-        if trimmed.contains(".unwrap()") {
-            problems.push(serde_json::json!({
-                "id": format!("{}:{}:unwrap", file_path_str, line_number),
-                "type": "warning",
-                "message": "Consider using proper error handling instead of unwrap()",
-                "file": file_path_str,
-                "line": line_number,
-                "column": 1,
-                "source": "Rust Analyzer"
-            }));
+        // Skip comments and empty lines
+        if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with("/*") {
+            continue;
         }
         
-        // Check for unused variables (very basic)
-        if trimmed.starts_with("let ") && !trimmed.contains("_") {
-            let var_name = extract_rust_variable(trimmed);
-            if let Some(var) = var_name {
-                if !is_rust_variable_used(&var, &content) {
-                    problems.push(serde_json::json!({
-                        "id": format!("{}:{}:unused", file_path_str, line_number),
-                        "type": "warning",
-                        "message": format!("Variable '{}' is never used", var),
-                        "file": file_path_str,
-                        "line": line_number,
-                        "column": 1,
-                        "source": "Rust Analyzer"
-                    }));
-                }
-            }
+        // Only flag if not in a comment context
+        if trimmed.starts_with("var ") && issue_count < 5 {
+            problems.push(Problem {
+                problem_type: "warning".to_string(),
+                message: "Use 'let' or 'const' instead of 'var'".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: 1,
+                severity: "warning".to_string(),
+                source: "JavaScript".to_string(),
+                code: Some("no-var".to_string()),
+            });
+            issue_count += 1;
+        }
+        
+        // Flag syntax errors
+        if trimmed.contains("SyntaxError") || trimmed.contains("ReferenceError") {
+            problems.push(Problem {
+                problem_type: "error".to_string(),
+                message: "JavaScript runtime error".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: 1,
+                severity: "error".to_string(),
+                source: "JavaScript".to_string(),
+                code: Some("syntax-error".to_string()),
+            });
         }
     }
     
     Ok(())
 }
 
-// Helper functions - currently unused but may be needed for future enhancements
-#[allow(dead_code)]
-fn extract_variable_declaration(line: &str) -> Option<String> {
-    if line.trim_start().starts_with("const ") || line.trim_start().starts_with("let ") || line.trim_start().starts_with("var ") {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            let var_part = parts[1];
-            let var_name = var_part.split('=').next()?.trim();
-            return Some(var_name.to_string());
-        }
-    }
-    None
-}
-
-#[allow(dead_code)]
-fn is_variable_used(var_name: &str, content: &str) -> bool {
-    let usage_count = content.matches(var_name).count();
-    usage_count > 1 // More than just the declaration
-}
-
-fn extract_python_import(line: &str) -> Option<String> {
-    if line.starts_with("import ") {
-        let import_name = line.strip_prefix("import ")?.split_whitespace().next()?;
-        Some(import_name.to_string())
-    } else if line.starts_with("from ") {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 4 && parts[2] == "import" {
-            Some(parts[3].to_string())
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
-fn is_python_import_used(import_name: &str, content: &str) -> bool {
-    let lines: Vec<&str> = content.lines().collect();
-    let usage_count = lines.iter()
-        .filter(|line| !line.trim_start().starts_with("import ") && !line.trim_start().starts_with("from "))
-        .filter(|line| line.contains(import_name))
-        .count();
-    usage_count > 0
-}
-
-fn extract_rust_variable(line: &str) -> Option<String> {
-    if line.trim_start().starts_with("let ") {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            let var_part = parts[1];
-            let var_name = var_part.split('=').next()?.split(':').next()?.trim();
-            return Some(var_name.to_string());
-        }
-    }
-    None
-}
-
-fn is_rust_variable_used(var_name: &str, content: &str) -> bool {
-    let usage_count = content.matches(var_name).count();
-    usage_count > 1
-}
-
-fn extract_python_variable_declaration(line: &str) -> Option<String> {
-    // Extract variable name from assignment
-    if line.contains(" = ") && !line.trim().starts_with("#") {
-        let parts: Vec<&str> = line.split(" = ").collect();
-        if let Some(left) = parts.first() {
-            let var_name = left.trim().split_whitespace().last()?;
-            // Skip if it contains complex patterns like array indexing or attributes
-            if !var_name.contains("[") && !var_name.contains(".") && !var_name.contains("(") {
-                return Some(var_name.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn extract_variable_from_print(line: &str) -> Option<String> {
-    // Extract variable from print statement like print(variable_name)
-    if let Some(start) = line.find("print(") {
-        let content = &line[start + 6..];
-        if let Some(end) = content.find(")") {
-            let var_content = &content[..end].trim();
-            // Only check for simple variable names (not strings, not complex expressions)
-            if !var_content.contains("\"") && !var_content.contains("'") && 
-               !var_content.contains("+") && !var_content.contains(".") &&
-               !var_content.contains("(") && var_content.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                return Some(var_content.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn is_builtin_python(name: &str) -> bool {
-    // Common Python builtins and keywords
-    matches!(name, "print" | "len" | "str" | "int" | "float" | "list" | "dict" | "tuple" | 
-                   "set" | "bool" | "None" | "True" | "False" | "range" | "enumerate" | 
-                   "zip" | "map" | "filter" | "sorted" | "reversed" | "sum" | "max" | "min")
-}
-
-// TypeScript helper functions
-fn extract_ts_import(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    if trimmed.starts_with("import ") {
-        // Extract from: import { invoke } from '@tauri-apps/api/core'
-        if let Some(start) = trimmed.find('{') {
-            if let Some(end) = trimmed.find('}') {
-                let imports = &trimmed[start + 1..end];
-                return Some(imports.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>().join(","));
-            }
-        }
-        // Extract from: import React from 'react'
-        if let Some(from_pos) = trimmed.find(" from ") {
-            let import_part = &trimmed[7..from_pos].trim(); // Skip "import "
-            return Some(import_part.to_string());
-        }
-    }
-    None
-}
-
-fn extract_ts_variable_declaration(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    if trimmed.starts_with("const ") || trimmed.starts_with("let ") || trimmed.starts_with("var ") {
-        let start = if trimmed.starts_with("const ") { 6 } else { 4 };
-        if let Some(eq_pos) = trimmed.find('=') {
-            let var_name = trimmed[start..eq_pos].trim();
-            return Some(var_name.to_string());
-        }
-        if let Some(colon_pos) = trimmed.find(':') {
-            let var_name = trimmed[start..colon_pos].trim();
-            return Some(var_name.to_string());
-        }
-    }
-    None
-}
-
-fn extract_ts_interface(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    if trimmed.starts_with("interface ") {
-        let start = 10; // "interface ".len()
-        if let Some(space_pos) = trimmed[start..].find(|c: char| c.is_whitespace() || c == '{') {
-            return Some(trimmed[start..start + space_pos].to_string());
-        }
-    } else if trimmed.starts_with("export interface ") {
-        let start = 17; // "export interface ".len()
-        if let Some(space_pos) = trimmed[start..].find(|c: char| c.is_whitespace() || c == '{') {
-            return Some(trimmed[start..start + space_pos].to_string());
-        }
-    }
-    None
-}
-
-fn is_ts_builtin(name: &str) -> bool {
-    ["console", "window", "document", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "fetch", "Promise", "Array", "Object", "String", "Number", "Boolean", "Date", "Math", "JSON", "Error", "RegExp", "Map", "Set", "WeakMap", "WeakSet", "React", "useState", "useEffect", "useCallback", "useMemo", "useRef", "useContext", "Component", "Fragment", "props", "state", "setState", "render", "children", "className", "style", "key", "ref", "event", "e", "target", "value", "name", "id", "type", "onClick", "onChange", "onSubmit", "preventDefault", "stopPropagation"].contains(&name)
-}
-
-fn is_ts_keyword(name: &str) -> bool {
-    ["function", "const", "let", "var", "if", "else", "for", "while", "do", "switch", "case", "default", "break", "continue", "return", "try", "catch", "finally", "throw", "class", "interface", "extends", "implements", "import", "export", "from", "as", "default", "async", "await", "yield", "typeof", "instanceof", "new", "this", "super", "null", "undefined", "true", "false"].contains(&name)
-}
-
-
-
-
-
-
-
-#[tauri::command]
-fn refresh_file_tree(workspace_path: String) -> Result<Vec<FileEntry>, String> {
-    println!("🔄 Backend: Refreshing file tree for: {}", workspace_path);
+fn analyze_python_file(file_path: &Path, problems: &mut Vec<Problem>) -> Result<(), Box<dyn std::error::Error>> {
+    let content = fs::read_to_string(file_path)?;
+    let file_path_str = file_path.to_string_lossy().to_string();
     
-    let tree = read_dir_recursive(&workspace_path, 3, 0);
+    // Skip __pycache__ and test files
+    if file_path_str.contains("__pycache__") || file_path_str.contains("test_") 
+       || file_path_str.contains("_test.py") {
+        return Ok(());
+    }
     
-    println!("✅ Backend: File tree refreshed with {} entries", tree.len());
-    Ok(tree)
+    let mut issue_count = 0;
+    
+    for (line_number, line) in content.lines().enumerate() {
+        let line_number = (line_number + 1) as u32;
+        let trimmed = line.trim();
+        
+        // Skip comments, empty lines, and docstrings
+        if trimmed.is_empty() || trimmed.starts_with("#") 
+           || trimmed.starts_with("\"\"\"") || trimmed.starts_with("'''") {
+            continue;
+        }
+        
+        // Basic syntax check
+        if trimmed.contains("SyntaxError") || trimmed.contains("IndentationError") {
+            problems.push(Problem {
+                problem_type: "error".to_string(),
+                message: "Python syntax error".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: 1,
+                severity: "error".to_string(),
+                source: "Python".to_string(),
+                code: Some("E999".to_string()),
+            });
+            issue_count += 1;
+        }
+        
+        if trimmed.contains("NameError") && issue_count < 10 {
+            problems.push(Problem {
+                problem_type: "error".to_string(),
+                message: "Name is not defined".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: 1,
+                severity: "error".to_string(),
+                source: "Python".to_string(),
+                code: Some("F821".to_string()),
+            });
+            issue_count += 1;
+        }
+        
+        // Basic unused import detection (simplified)
+        if trimmed.starts_with("import ") && trimmed.contains(" as ") 
+           && issue_count < 5 {
+            problems.push(Problem {
+                problem_type: "warning".to_string(),
+                message: "Check if import is used".to_string(),
+                file: file_path_str.clone(),
+                line: line_number,
+                column: 1,
+                severity: "warning".to_string(),
+                source: "Python".to_string(),
+                code: Some("F401".to_string()),
+            });
+            issue_count += 1;
+        }
+    }
+    
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             open_folder,
-            open_file,
-            open_file_dialog,
-            save_file,
-            save_as_file,
-            execute_command_in_workspace,
-            get_file_list,
             read_file_content,
             write_file_content,
-            create_new_file,
-            create_new_folder,
-            rename_file_or_folder,
-            delete_file_or_folder,
-            run_file_in_terminal,
-            analyze_workspace_problems,
-            refresh_file_tree
+            refresh_file_tree,
+            open_file,
+            search_in_files,
+            analyze_workspace_problems
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
+} 

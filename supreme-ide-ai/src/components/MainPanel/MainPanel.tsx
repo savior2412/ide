@@ -79,7 +79,7 @@ interface MainPanelProps {
 
 type BottomTabType = 'terminal' | 'problems' | 'output' | 'debug' | 'ports';
 
-const MainPanel = ({ filePath, fileContent, isDirty, onContentChange, workspacePath }: MainPanelProps) => {
+const MainPanel = ({ filePath: _filePath, fileContent: _fileContent, isDirty: _isDirty, onContentChange, workspacePath }: MainPanelProps) => {
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string>('');
   const [terminalInput, setTerminalInput] = useState('');
@@ -93,6 +93,11 @@ const MainPanel = ({ filePath, fileContent, isDirty, onContentChange, workspaceP
   // Code tabs management - Main tabs at top
   const [codeTabs, setCodeTabs] = useState<CodeTab[]>([]);
   const [activeCodeTab, setActiveCodeTab] = useState<string>('');
+  
+  // Tab resizing state
+  const [tabHeight, setTabHeight] = useState<number>(44); // Default 44px
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  const resizeStartRef = useRef<{ y: number; height: number } | null>(null);
 
   const [outputEntries] = useState<OutputEntry[]>([
     { timestamp: new Date(), source: 'Build', message: 'Starting build process...', type: 'build' },
@@ -202,35 +207,32 @@ Type 'help' for available commands.`,
     }
   }, [workspacePath]);
 
-  // Analyze workspace for problems when workspace changes
-  useEffect(() => {
-    if (workspacePath) {
-      analyzeWorkspaceProblems();
-    }
-  }, [workspacePath]);
-
-  // Realtime error detection - refresh problems every 5 seconds
+  // Auto refresh problems khi có workspace - HỆ THỐNG THỐNG NHẤT
   useEffect(() => {
     if (!workspacePath) return;
 
+    console.log('🔧 Setting up unified problems auto-refresh system...');
+    
+    // Initial load
+    analyzeWorkspaceProblems();
+    
+    // Thiết lập interval refresh mỗi 5 giây
     const interval = setInterval(() => {
-      console.log('🔄 MainPanel: Auto-refreshing problems...');
+      console.log('⏰ Auto-refreshing problems (5s interval)...');
       analyzeWorkspaceProblems();
-    }, 5000); // Refresh every 5 seconds
+    }, 5000); // 5 giây
 
     return () => {
       clearInterval(interval);
     };
   }, [workspacePath]);
 
-  // Listen for file changes to trigger immediate problem refresh
+  // Listen for file changes để trigger immediate problem refresh
   useEffect(() => {
     const handleFileChange = () => {
       if (workspacePath) {
-        console.log('📝 File change detected, refreshing problems...');
-        setTimeout(() => {
-          analyzeWorkspaceProblems();
-        }, 1000); // 1 second delay to allow file save to complete
+        console.log('📝 File change detected, refreshing problems immediately...');
+        analyzeWorkspaceProblems();
       }
     };
 
@@ -242,52 +244,50 @@ Type 'help' for available commands.`,
     };
   }, [workspacePath]);
 
-  // Auto-refresh problems when file content changes
-  useEffect(() => {
-    if (workspacePath && filePath && isDirty) {
-      console.log('🔄 File changed, auto-refreshing problems...');
-      // Debounce để tránh quá nhiều requests
-      const debounceTimer = setTimeout(() => {
-        analyzeWorkspaceProblems();
-      }, 1000); // Refresh sau 1s không có thay đổi
-      
-      return () => clearTimeout(debounceTimer);
-    }
-  }, [workspacePath, filePath, fileContent, isDirty]);
-
-  // Periodic refresh problems (mỗi 30s)
-  useEffect(() => {
-    if (!workspacePath) return;
-    
-    const intervalId = setInterval(() => {
-      console.log('⏰ Periodic problems refresh...');
-      analyzeWorkspaceProblems();
-    }, 30000); // 30 seconds
-    
-    return () => clearInterval(intervalId);
-  }, [workspacePath]);
-
   const analyzeWorkspaceProblems = async () => {
     if (!workspacePath) return;
     
     setIsAnalyzing(true);
+    console.log(`🔍 Starting workspace analysis for: ${workspacePath}`);
+    console.log(`⏰ Current time: ${new Date().toLocaleTimeString()}`);
+    
     try {
       const result = await invoke('analyze_workspace_problems', { 
         workspacePath: workspacePath 
       }) as ProblemsData;
       
-      setProblemsData(result);
-      
-      // Convert to flat list for backward compatibility
-      const allProblems: Problem[] = [];
-      result.fileGroups.forEach(group => {
-        group.problems.forEach(problem => {
-          allProblems.push(problem);
-        });
+      console.log(`✅ Analysis complete at ${new Date().toLocaleTimeString()}:`, {
+        totalFileGroups: result.fileGroups?.length || 0,
+        totalProblems: result.totalProblems || 0,
+        fileBreakdown: result.fileGroups?.map(group => ({
+          fileName: group.fileName,
+          problemCount: group.problemCount,
+          fileType: group.fileType
+        }))
       });
       
+      // Verify the data is complete
+      if (result.fileGroups && result.fileGroups.length > 0) {
+        console.log(`📊 Problem distribution:`, result.fileGroups.map(group => 
+          `${group.fileName}: ${group.problemCount} ${group.fileType} errors`
+        ).join(', '));
+      }
+      
+      setProblemsData(result);
+      
+      // Convert to flat list for backwards compatibility
+      const flatProblems = result.fileGroups?.flatMap(group => 
+        group.problems?.map(problem => ({
+          ...problem,
+          fileName: group.fileName,
+          fileType: group.fileType
+        })) || []
+      ) || [];
+      
+      console.log(`🔧 Found ${flatProblems.length} total problems for UI`);
+      
     } catch (error) {
-      console.error('Failed to analyze workspace problems:', error);
+      console.error('❌ Error analyzing problems:', error);
       setProblemsData({ fileGroups: [], totalProblems: 0 });
     } finally {
       setIsAnalyzing(false);
@@ -909,6 +909,42 @@ Type 'help' for available commands.`,
     openFileInEditor(problem.file, problem.line, problem.column);
   };
 
+  // Tab resize handlers
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeStartRef.current = { y: e.clientY, height: tabHeight };
+    
+    // Add global mouse event listeners
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeEnd);
+  };
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!isResizing || !resizeStartRef.current) return;
+    
+    const deltaY = e.clientY - resizeStartRef.current.y;
+    const newHeight = Math.max(30, Math.min(200, resizeStartRef.current.height + deltaY));
+    setTabHeight(newHeight);
+  }, [isResizing]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+    resizeStartRef.current = null;
+    
+    // Remove global mouse event listeners
+    document.removeEventListener('mousemove', handleResizeMove);
+    document.removeEventListener('mouseup', handleResizeEnd);
+  }, [handleResizeMove]);
+
+  // Cleanup resize listeners on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+    };
+  }, [handleResizeMove, handleResizeEnd]);
+
 
 
   // Expose openFileInEditor globally for FileExplorer
@@ -937,14 +973,21 @@ Type 'help' for available commands.`,
     <div className={styles.container}>
       {/* Code Tabs Bar - Positioned at top like VS Code */}
       {codeTabs.length > 0 && (
-        <div className={styles.codeTabsContainer}>
-          <div className={styles.codeTabsBar}>
+        <div 
+          className={styles.codeTabsContainer}
+          style={{ height: tabHeight, minHeight: tabHeight, maxHeight: tabHeight }}
+        >
+          <div 
+            className={styles.codeTabsBar}
+            style={{ height: tabHeight, minHeight: tabHeight }}
+          >
             {codeTabs.map((tab) => (
               <div
                 key={tab.id}
                 className={`${styles.codeTab} ${tab.isActive ? styles.activeTab : ''}`}
                 onClick={() => switchCodeTab(tab.id)}
                 title={tab.path} // Show full path on hover
+                style={{ height: tabHeight - 2 }} // -2px for border
               >
                 <span className={styles.tabIcon}>
                   {getLanguageIcon(tab.language)}
@@ -963,6 +1006,14 @@ Type 'help' for available commands.`,
                 </button>
               </div>
             ))}
+          </div>
+          {/* Tab Resize Handle */}
+          <div 
+            className={styles.tabResizeHandle}
+            onMouseDown={handleResizeStart}
+            title="Drag to resize tabs height"
+          >
+            <div className={styles.resizeHandleBar}></div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { invoke } from '@tauri-apps/api/core';
 import './App.css';
@@ -21,6 +21,21 @@ function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [notification, setNotification] = useState<NotificationState | null>(null);
   const [isLoadingFolder, setIsLoadingFolder] = useState(false);
+
+  // Listen for file opening with specific location
+  useEffect(() => {
+    const handleFileWithLocation = (event: CustomEvent) => {
+      const { filePath, line, column } = event.detail;
+      console.log(`🎯 Opening file with location: ${filePath}:${line}:${column}`);
+      handleFileSelect(filePath, line, column);
+    };
+
+    window.addEventListener('open-file-with-location', handleFileWithLocation as EventListener);
+
+    return () => {
+      window.removeEventListener('open-file-with-location', handleFileWithLocation as EventListener);
+    };
+  }, []);
 
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setNotification({ message, type });
@@ -72,29 +87,38 @@ function App() {
     }
   };
 
-  const handleFileSelect = async (filePath: string) => {
+  const handleFileSelect = async (filePath: string, line?: number, column?: number) => {
     try {
       console.log('📂 App: File selected from FileExplorer:', filePath);
+      
+      // Convert relative path to absolute path if needed
+      let absolutePath = filePath;
+      if (workspacePath && !filePath.startsWith('/')) {
+        absolutePath = `${workspacePath}/${filePath}`;
+      }
+      
+      console.log('📂 App: Converted to absolute path:', absolutePath);
       
       // Trigger event for MainPanel to handle tab opening
       const event = new CustomEvent('open-file-in-editor', {
         detail: { 
-          filePath: filePath,
-          line: 1,
-          column: 1
+          filePath: absolutePath,
+          line: line || 1,
+          column: column || 1
         }
       });
       window.dispatchEvent(event);
       
       // Also update currentFile for backward compatibility
-      const content = await invoke<string>('open_file', { path: filePath });
+      const content = await invoke<string>('open_file', { path: absolutePath });
       const language = getLanguageFromExtension(filePath);
-      setCurrentFile({ path: filePath, content, language });
+      setCurrentFile({ path: absolutePath, content, language });
       setIsDirty(false);
       showNotification('File loaded successfully', 'success');
     } catch (error) {
-      console.error('Không thể đọc file:', error);
-      showNotification('Failed to load file', 'error');
+      console.error('❌ App: Không thể đọc file:', error);
+      console.error('❌ App: Error details:', error);
+      showNotification(`Failed to load file: ${error}`, 'error');
     }
   };
 
