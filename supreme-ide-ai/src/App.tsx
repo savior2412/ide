@@ -208,7 +208,11 @@ function App() {
           </Panel>
           <PanelResizeHandle />
           <Panel defaultSize={20} minSize={15}>
-            <AssistantPanel />
+            <AssistantPanel 
+              workspacePath={workspacePath}
+              onFileSelect={handleFileSelect}
+              onOpenFolder={handleOpenFolder}
+            />
           </Panel>
         </PanelGroup>
       </div>
